@@ -1,11 +1,16 @@
-"""Run complete validation pipeline: tests → evals → skill validation → agent tests."""
+"""Run complete validation pipeline: tests -> evals -> skill validation -> agent tests."""
 
 import sys
 import subprocess
 from rich.console import Console
 from rich.panel import Panel
 
-console = Console()
+# Force UTF-8 encoding on Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+console = Console(force_terminal=True)
 
 
 def run_command(cmd: list[str], description: str) -> bool:
@@ -16,10 +21,10 @@ def run_command(cmd: list[str], description: str) -> bool:
     result = subprocess.run(cmd)
 
     if result.returncode == 0:
-        console.print(f"[green]✓ {description} passed[/green]")
+        console.print(f"[green]PASS: {description}[/green]")
         return True
     else:
-        console.print(f"[red]✗ {description} failed[/red]")
+        console.print(f"[red]FAIL: {description}[/red]")
         return False
 
 
@@ -53,7 +58,7 @@ def main():
 
     all_passed = True
     for desc, success in results:
-        status = "✅" if success else "❌"
+        status = "[green]PASS[/green]" if success else "[red]FAIL[/red]"
         console.print(f"{status} {desc}")
         if not success:
             all_passed = False
@@ -61,10 +66,10 @@ def main():
     console.print()
 
     if all_passed:
-        console.print("[bold green]✓ All validation steps passed![/bold green]")
+        console.print("[bold green]All validation steps passed![/bold green]")
         return 0
     else:
-        console.print("[bold red]✗ Some validation steps failed[/bold red]")
+        console.print("[bold red]Some validation steps failed[/bold red]")
         return 1
 
 

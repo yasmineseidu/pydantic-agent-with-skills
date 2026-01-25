@@ -3,26 +3,51 @@ name: response_quality_assessment
 cases:
   - name: weather_helpful_response
     inputs: "What's the weather in Paris?"
+    metadata:
+      category: response_quality
     evaluators:
-      - LLMJudge:
-          rubric: "Response provides accurate weather information and directly answers the user's question"
-          include_input: true
-          assertion:
-            evaluation_name: weather_accuracy
-      - LLMJudge:
-          rubric: "Response is clear, well-formatted, and easy to understand"
-          score:
-            evaluation_name: clarity_score
+      - SkillWasLoaded:
+          skill_name: weather
+      - ResponseNotEmpty:
+          min_length: 100
+      - ResponseContains:
+          text: paris
 
   - name: code_review_constructive
     inputs: "Review this function: def calculate(x, y): return x + y"
+    metadata:
+      category: response_quality
     evaluators:
-      - LLMJudge:
-          rubric: "Code review provides constructive, actionable feedback on the code"
-          model: "anthropic:claude-sonnet-4-5"
-          temperature: 0.0
-          assertion:
-            evaluation_name: constructive_feedback
+      - SkillWasLoaded:
+          skill_name: code_review
+      - ResponseNotEmpty:
+          min_length: 200
+      - ResponseContains:
+          text: function
+
+  - name: weather_with_units
+    inputs: "What's the temperature in Berlin?"
+    metadata:
+      category: response_quality
+    evaluators:
+      - SkillWasLoaded:
+          skill_name: weather
+      - ToolWasCalled:
+          tool_name: http_get_tool
+      - ResponseContains:
+          text: berlin
+
+  - name: code_review_security_focus
+    inputs: "Check this for SQL injection: user_query = f'SELECT * FROM users WHERE id={id}'"
+    metadata:
+      category: response_quality
+    evaluators:
+      - SkillWasLoaded:
+          skill_name: code_review
+      - ResponseContains:
+          text: injection
+      - ResponseNotEmpty:
+          min_length: 150
 
 evaluators:
-  - IsInstance: str
+  - MaxDuration: 30.0

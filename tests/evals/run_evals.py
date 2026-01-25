@@ -100,10 +100,6 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
             print(f"\n[WARNING] Skipping {yaml_file.name} - not found")
             continue
 
-        # Skip response_quality for now (uses LLMJudge which needs separate config)
-        if yaml_file.stem == 'response_quality':
-            print(f"\n[SKIP] {yaml_file.stem} (requires LLMJudge configuration)")
-            continue
 
         print(f"\n{'=' * 60}")
         print(f"Running: {yaml_file.stem}")
@@ -126,35 +122,44 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
             print("\nResults:")
             print("-" * 60)
 
-            for case_result in report.case_results:
-                case_name = case_result.name
+            # Process successful cases
+            for case in report.cases:
+                case_name = case.name
                 total_cases += 1
 
-                # Check if all evaluations passed
+                # Check all assertions (boolean evaluators)
                 case_passed = True
                 eval_details = []
 
-                for eval_result in case_result.evaluations:
-                    eval_name = eval_result.name
+                # Check assertions (boolean results)
+                for eval_name, eval_result in case.assertions.items():
                     value = eval_result.value
-
-                    # Determine pass/fail
-                    if isinstance(value, bool):
-                        passed = value
-                    elif isinstance(value, (int, float)):
-                        passed = value > 0
-                    else:
-                        passed = True  # Assume pass for other types
+                    passed = value is True
 
                     if not passed:
                         case_passed = False
 
                     status = "PASS" if passed else "FAIL"
                     reason = ""
-                    if hasattr(eval_result, 'reason') and eval_result.reason:
+                    if eval_result.reason:
                         reason = f" - {eval_result.reason}"
 
                     eval_details.append(f"    [{status}] {eval_name}{reason}")
+
+                # Check scores (numeric results - pass if > 0)
+                for eval_name, eval_result in case.scores.items():
+                    value = eval_result.value
+                    passed = value > 0
+
+                    if not passed:
+                        case_passed = False
+
+                    status = "PASS" if passed else "FAIL"
+                    reason = ""
+                    if eval_result.reason:
+                        reason = f" - {eval_result.reason}"
+
+                    eval_details.append(f"    [{status}] {eval_name}: {value}{reason}")
 
                 if case_passed:
                     passed_cases += 1
@@ -166,6 +171,12 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
                 if verbose or not case_passed:
                     for detail in eval_details:
                         print(detail)
+
+            # Process failures
+            for failure in report.failures:
+                total_cases += 1
+                all_passed = False
+                print(f"[ERROR] {failure.name}: {failure.error}")
 
             print("-" * 60)
             print(f"Cases: {passed_cases}/{total_cases} passed")

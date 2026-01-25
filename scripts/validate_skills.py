@@ -1,5 +1,6 @@
 """Validate skill structure and content."""
 
+import sys
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
@@ -7,7 +8,12 @@ from rich.panel import Panel
 from src.skill_loader import SkillLoader
 from src.settings import load_settings
 
-console = Console()
+# Force UTF-8 encoding on Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+console = Console(force_terminal=True)
 
 
 def validate_skill_structure(skill_dir: Path) -> list[str]:
@@ -65,10 +71,10 @@ def main():
 
         if issues:
             all_valid = False
-            status = "❌ FAIL"
-            issues_str = "\n".join(f"  • {i}" for i in issues)
+            status = "[red]FAIL[/red]"
+            issues_str = "\n".join(f"  - {i}" for i in issues)
         else:
-            status = "✅ PASS"
+            status = "[green]PASS[/green]"
             issues_str = "None"
 
         table.add_row(skill.name, status, issues_str)
@@ -76,10 +82,10 @@ def main():
     console.print(table)
 
     if all_valid:
-        console.print("\n[bold green]✓ All skills valid![/bold green]")
+        console.print("\n[bold green]All skills valid![/bold green]")
         return 0
     else:
-        console.print("\n[bold red]✗ Some skills have issues[/bold red]")
+        console.print("\n[bold red]Some skills have issues[/bold red]")
         return 1
 
 
