@@ -1,5 +1,5 @@
 {
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (9 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
