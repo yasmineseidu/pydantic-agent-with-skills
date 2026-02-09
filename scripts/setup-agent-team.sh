@@ -40,6 +40,7 @@ PACKAGE_MANAGER=""
 RUN_CMD=""
 INSTALL_CMD=""
 PROTECTED_PATHS=".env"
+LANG_EXT=""
 PROFILE=""  # lite or full
 
 ###############################################################################
@@ -50,6 +51,7 @@ print_banner() {
   echo -e "${BLUE}${BOLD}+==========================================+${NC}"
   echo -e "${BLUE}${BOLD}|     Agent Team System Setup              |${NC}"
   echo -e "${BLUE}${BOLD}|     3-agent Lite or 19-agent Full        |${NC}"
+  echo -e "${BLUE}${BOLD}|     Now with modular .claude/rules/      |${NC}"
   echo -e "${BLUE}${BOLD}+==========================================+${NC}"
   echo ""
   echo -e "  Working directory: ${CYAN}${PROJECT_DIR}${NC}"
@@ -101,6 +103,17 @@ detect_stack() {
   else
     LANGUAGE=""
   fi
+
+  # Derive file extension from language
+  case "$LANGUAGE" in
+    python) LANG_EXT="py" ;;
+    javascript) LANG_EXT="js" ;;
+    typescript) LANG_EXT="ts" ;;
+    rust) LANG_EXT="rs" ;;
+    go) LANG_EXT="go" ;;
+    java) LANG_EXT="java" ;;
+    *) LANG_EXT="*" ;;
+  esac
 
   # Detect source directory
   if [ -d "src" ]; then
@@ -493,7 +506,7 @@ generate_settings_json() {
 
   cat > "$filepath" << 'SETTINGS_EOF'
 {
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (9 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
@@ -546,6 +559,560 @@ generate_reports_dir() {
   touch "reports/.gitkeep"
   touch "reports/prd/.gitkeep"
   echo -e "  ${GREEN}CREATE${NC}: reports/"
+}
+
+###############################################################################
+# Generate: .claude/rules/ modular rules system
+###############################################################################
+generate_rules() {
+  local rules_profile="${1:-full}"  # "lite" or "full"
+
+  echo -e "${YELLOW}Creating .claude/rules/ (${rules_profile} profile)...${NC}"
+  ensure_dir ".claude/rules"
+
+  # --- 1. mandatory-practices.md (always) ---
+  write_file_if_new ".claude/rules/mandatory-practices.md" "---
+description: Non-negotiable practices enforced on every agent and every session.
+globs:
+  - \"**\"
+---
+
+# Mandatory Practices
+
+These 6 practices are NON-NEGOTIABLE. Every agent, every session.
+
+## 1. Grep Local Codebase FIRST
+
+Before writing ANY code, grep THIS project to study existing patterns.
+
+\`\`\`
+Grep for import patterns in ${SRC_DIR}
+Grep for class/function definitions in ${SRC_DIR}
+Read the file you're about to modify
+\`\`\`
+
+## 2. Grep MCP (grep-mcp)
+
+AFTER grepping local, use \`grep_query\` to search millions of GitHub repos.
+
+\`\`\`
+grep_query: query=\"{feature} {framework}\", language=\"${LANGUAGE}\"
+\`\`\`
+
+Skip ONLY for typo fixes or < 5 lines changed.
+
+## 3. LSP After Every Edit
+
+- \`getDiagnostics\` after EVERY edit -- fix errors immediately
+- \`goToDefinition\` before modifying any function
+- \`findReferences\` before renaming or refactoring
+
+## 4. Plan Before Execute
+
+Outline plan BEFORE non-trivial changes:
+1. Files to read
+2. Searches to run
+3. Changes per file
+4. Verification steps
+
+Skip only for single-line fixes.
+
+## 5. Learn From Mistakes
+
+- Read \`LEARNINGS.md\` at session start
+- Write learnings at session end
+- Format: \`CATEGORY: what -> fix/reuse\` (1 line, max 120 chars)
+
+## 6. Task Management
+
+- \`TaskUpdate: in_progress\` when starting work
+- \`TaskUpdate: completed\` only after ALL verification passes
+- NEVER mark complete if tests fail or errors remain
+
+## Additional Practices
+
+- **Read before write**: Always read existing files before modifying
+- **Match patterns**: Follow existing codebase conventions exactly
+- **Type everything**: Full type annotations, no exceptions
+- **Test after change**: Run \`${TEST_CMD:-tests}\` after any code change
+- **Lint after change**: Run \`${LINTER_CMD:-linter}\` after any code change
+- **Respect ownership**: Only modify files you own
+"
+
+  # --- 2. coding-principles.md (always) ---
+  write_file_if_new ".claude/rules/coding-principles.md" "---
+description: Core coding principles for all source and test code.
+globs:
+  - \"${SRC_DIR}**\"
+  - \"${TESTS_DIR}**\"
+---
+
+# Coding Principles
+
+## Type Safety Is Non-Negotiable
+
+- All functions, methods, and variables MUST have type annotations
+- No \`Any\` types without explicit justification
+- Use validated data models for all structured data
+
+## KISS (Keep It Simple)
+
+- Prefer simple, readable solutions over clever abstractions
+- Don't build fallback mechanisms unless absolutely necessary
+- If a solution feels complex, step back and simplify
+
+## YAGNI (You Aren't Gonna Need It)
+
+- Don't build features until they're actually needed
+- MVP first, enhancements later
+- Focus on the immediate requirement
+
+## Reference the Examples
+
+If an \`examples/\` directory exists, it contains reference patterns:
+- DO NOT MODIFY files in \`examples/\` -- they are reference only
+- Copy patterns and code from examples, adapt for your needs
+- Maintain same architecture and design patterns
+
+## Error Handling
+
+- Catch specific exceptions first, then general
+- Return error strings from tool functions (don't raise) where applicable
+- Use structured logging: \`f\"action_name: key={value}\"\`
+- Never swallow errors silently
+
+## Import Ordering
+
+Follow existing import ordering in the project. Verify by reading existing files before writing new code.
+"
+
+  # --- 3. common-pitfalls.md (always) ---
+  write_file_if_new ".claude/rules/common-pitfalls.md" "---
+description: Common mistakes to avoid when writing code.
+globs:
+  - \"${SRC_DIR}**/*.${LANG_EXT}\"
+---
+
+# Common Pitfalls
+
+## 1. Assuming File Contents
+
+**Wrong**: Writing code that assumes a file's structure without reading it.
+**Right**: Always \`Read\` the target file before modifying. Never assume imports, function signatures, or variable names.
+
+## 2. Inventing APIs
+
+**Wrong**: Calling functions or methods that you assume exist.
+**Right**: Use \`Grep\` to verify the API exists. Use \`LSP goToDefinition\` to check signatures.
+
+## 3. Missing Type Hints
+
+**Wrong**: Functions without type annotations.
+**Right**: Full type annotations on all functions, parameters, and return values.
+
+## 4. Not Initializing Dependencies
+
+**Wrong**: Using dependencies that haven't been initialized.
+**Right**: Call initialization methods before using any injected dependency.
+
+## 5. Forgetting Security Basics
+
+**Wrong**: Constructing file paths from unvalidated user input.
+**Right**: Validate paths are within expected directories. Use resolve() + relative_to checks.
+
+## 6. Silent Fallbacks
+
+**Wrong**: \`if X fails, try Y instead\` without telling anyone.
+**Right**: Fail loudly. Report the exact error and ask how to proceed.
+
+## 7. Creating Duplicates
+
+**Wrong**: Writing a utility function that already exists elsewhere.
+**Right**: Grep the codebase first. Reuse existing code.
+
+## 8. Skipping Tests
+
+**Wrong**: Marking a task complete without running tests.
+**Right**: Run \`${TEST_CMD:-tests}\` and verify all pass before marking complete.
+"
+
+  # --- 4. testing-patterns.md (always) ---
+  write_file_if_new ".claude/rules/testing-patterns.md" "---
+description: Testing conventions and patterns.
+globs:
+  - \"${TESTS_DIR}**\"
+  - \"${SRC_DIR}**/*.${LANG_EXT}\"
+---
+
+# Testing Patterns
+
+## Test Infrastructure
+
+- **Runner**: ${TEST_RUNNER:-not configured}
+- **Test directory**: \`${TESTS_DIR}\`
+- **Run command**: \`${TEST_CMD:-not configured}\`
+
+## Test Structure
+
+Tests mirror the source directory:
+\`\`\`
+${SRC_DIR}module.${LANG_EXT}  ->  ${TESTS_DIR}test_module.${LANG_EXT}
+\`\`\`
+
+## Test Naming
+
+Follow existing test naming conventions in \`${TESTS_DIR}\`. Read existing tests before writing new ones.
+
+## Failure Reporting
+
+When tests fail, report EACH failure as:
+\`\`\`
+### FAILURE: test_name
+- **File**: ${TESTS_DIR}test_file:line
+- **Source**: ${SRC_DIR}module:line (the failing code)
+- **Error**: ExactErrorMessage
+- **Suggested Fix**: What should change
+- **Severity**: CRITICAL|HIGH|MEDIUM|LOW
+\`\`\`
+
+## Verification Checklist
+
+Before marking any task complete:
+- [ ] All existing tests pass: \`${TEST_CMD:-tests}\`
+- [ ] New tests written for new functionality
+- [ ] No test relies on external services without mocking
+- [ ] Edge cases covered
+"
+
+  # --- 5. documentation-style.md (always) ---
+  write_file_if_new ".claude/rules/documentation-style.md" "---
+description: Documentation and docstring conventions.
+globs:
+  - \"**/*.${LANG_EXT}\"
+  - \"**/*.md\"
+---
+
+# Documentation Style
+
+## Docstring Format
+
+Follow the project's existing documentation style. When in doubt, use the language's standard format.
+
+### Common Formats by Language
+
+- **Python**: Google-style docstrings (Args/Returns/Raises)
+- **JavaScript/TypeScript**: JSDoc with @param/@returns/@throws
+- **Rust**: Doc comments with /// and # Examples
+- **Go**: Package comments with godoc conventions
+- **Java**: Javadoc with @param/@return/@throws
+
+## When to Document
+
+- All public functions, classes, and modules
+- All exported/public APIs
+- Complex internal logic
+- Non-obvious business rules
+
+## Markdown Files
+
+- Use ATX-style headers (\`#\`, \`##\`, \`###\`)
+- One blank line between sections
+- Code blocks with language identifiers
+- Tables for structured comparisons
+"
+
+  # --- 6. security.md (always) ---
+  write_file_if_new ".claude/rules/security.md" "---
+description: Security requirements for all source code.
+globs:
+  - \"${SRC_DIR}**/*.${LANG_EXT}\"
+---
+
+# Security Standards
+
+## Secrets Management
+
+- ALL secrets in \`.env\` file only
+- Access via settings/config objects -- never read env vars directly in business logic
+- \`.env.example\` must use PLACEHOLDER values, never real keys
+- Never log passwords, tokens, or API keys
+
+## Path Traversal Prevention
+
+For all file access:
+- Validate file paths are within expected directories
+- Use resolve() + is_relative_to() or equivalent
+- Never construct file paths from unvalidated user input
+
+## Input Validation
+
+- Validate type, length, and format before using any input
+- Use parameterized queries for database access
+- Timeout all HTTP requests
+- Truncate large responses
+
+## Security Review Checklist
+
+1. [ ] No hardcoded secrets
+2. [ ] File paths validated for traversal
+3. [ ] HTTP requests use timeouts
+4. [ ] No eval/exec with dynamic input
+5. [ ] Logging doesn't include secret values
+6. [ ] New dependencies are from trusted sources
+7. [ ] Error messages don't leak internal paths
+
+## Incident Response
+
+If a security issue is found:
+1. **Stop**: Don't deploy or merge
+2. **Document**: Record in LEARNINGS.md under \"Security Issues\"
+3. **Fix**: Prioritize fix above all other work
+4. **Verify**: Security review of the fix
+"
+
+  # --- Full-profile-only rules (7-9) ---
+  if [ "$rules_profile" = "full" ]; then
+
+    # --- 7. agent-system.md ---
+    write_file_if_new ".claude/rules/agent-system.md" "---
+description: Agent team routing, structure, and operational rules.
+globs:
+  - \".claude/agents/**\"
+  - \"team-registry/**\"
+---
+
+# Agent Team System
+
+## Task Routing
+
+| Request Pattern | Route To | Type |
+|----------------|----------|------|
+| \"build/implement/add [simple]\" | builder | Agent |
+| \"build/implement [complex]\" | feature-team-coordinator | Team |
+| \"review/check/audit\" | review-team-coordinator | Team |
+| \"test/verify\" | tester | Agent |
+| \"research/find/explore\" | research-swarm-coordinator | Team |
+| \"plan/design/decompose/PRD\" | prd-team-coordinator | Team |
+| \"document/explain\" | documenter | Agent |
+| \"debug/fix [simple]\" | builder | Agent |
+| \"debug/investigate [complex]\" | hypothesis-team-coordinator | Team |
+| \"refactor/migrate\" | plan-execute-coordinator | Team |
+| \"create agent/team/skill\" | system-architect | Agent |
+| \"assess risk\" | risk-assessor | Agent |
+
+## Agent Table
+
+### Core Agents (6)
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| orchestrator | Routes tasks, manages workflow | opus |
+| builder | Writes code following existing patterns | sonnet |
+| reviewer | Code review + fix capability | sonnet |
+| tester | Runs tests, reports failures | sonnet |
+| researcher | Researches solutions and packages | sonnet |
+| documenter | Documentation and reference files | sonnet |
+
+### Team Coordinators (6)
+| Coordinator | Team | Purpose |
+|-------------|------|---------|
+| review-team-coordinator | Parallel Review | Coordinates parallel code reviews |
+| feature-team-coordinator | Cross-Layer Feature | Coordinates cross-module feature dev |
+| hypothesis-team-coordinator | Competing Hypotheses | Manages parallel investigation |
+| research-swarm-coordinator | Research Swarm | Coordinates parallel research |
+| plan-execute-coordinator | Plan-Then-Execute | Plans then coordinates execution |
+| prd-team-coordinator | PRD Decomposition | Decomposes PRDs into tasks |
+
+### Specialist Agents (7)
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| skill-builder | Creates/modifies skills | sonnet |
+| requirements-extractor | Extracts structured requirements | sonnet |
+| technical-researcher | Codebase + tech research | sonnet |
+| architecture-designer | Architecture design | opus |
+| task-decomposer | Task breakdown | sonnet |
+| risk-assessor | Risk identification (read-only) | sonnet |
+| system-architect | Creates new agents/teams/skills | opus |
+
+## Agent Skills
+
+| Skill | Location | Used By |
+|-------|----------|---------|
+| coding-conventions | \`.claude/skills/coding-conventions/\` | all agents |
+| team-coordination | \`.claude/skills/team-coordination/\` | all coordinators |
+| security-standards | \`.claude/skills/security-standards/\` | reviewer, risk-assessor |
+| research-patterns | \`.claude/skills/research-patterns/\` | researcher, technical-researcher |
+
+## Protected Paths (NEVER MODIFY)
+
+$(echo "$PROTECTED_PATHS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | while read -r p; do echo "- \\\`$p\\\`"; done)
+
+## Retry Limits
+
+| Operation | Max Retries | On Failure |
+|-----------|-------------|------------|
+| Build + Test | 3 | Escalate to orchestrator |
+| Review + Fix | 5 | Escalate to orchestrator |
+| Research | 2 | Report partial findings |
+"
+
+    # --- 8. skill-system.md ---
+    write_file_if_new ".claude/rules/skill-system.md" "---
+description: How to create and use skills.
+globs:
+  - \".claude/skills/**\"
+---
+
+# Skill System
+
+Skills implement progressive disclosure for agent instructions.
+
+## Skill Directory Structure
+
+\`\`\`
+.claude/skills/skill-name/
+  SKILL.md                 # YAML frontmatter + instructions
+  scripts/                 # Optional helper scripts
+  references/              # Optional documentation
+  assets/                  # Optional templates and data
+\`\`\`
+
+## SKILL.md Format
+
+\`\`\`markdown
+---
+name: skill-name
+description: Brief description for agent discovery (1-2 sentences)
+version: 1.0.0
+author: Your Name
+---
+
+# Skill Name
+
+Brief overview.
+
+## When to Use
+- Scenario 1
+- Scenario 2
+
+## Instructions
+Step-by-step instructions...
+
+## Resources
+- \\\`references/api_docs.md\\\` - API documentation
+- \\\`scripts/helper.py\\\` - Helper script
+\`\`\`
+
+## Creating a New Skill
+
+1. Create directory under \`.claude/skills/\`
+2. Write \`SKILL.md\` with YAML frontmatter
+3. Add to agent definitions that need it (skills: list)
+4. Update team registry if relevant
+
+## Existing Skills
+
+Check \`.claude/skills/\` for current skills in this project.
+"
+
+    # --- 9. configuration.md ---
+    write_file_if_new ".claude/rules/configuration.md" "---
+description: Configuration and environment variable patterns.
+globs:
+  - \"${SRC_DIR}settings.*\"
+  - \"${SRC_DIR}config.*\"
+  - \".env*\"
+---
+
+# Configuration Patterns
+
+## Environment Variables
+
+- ALL configuration in \`.env\` file
+- Use validated settings/config objects to access values
+- Never use raw environment variable access in business logic
+- \`.env.example\` documents required variables with placeholder values
+
+## Settings Pattern
+
+Use the language's standard configuration approach:
+- **Python**: Pydantic Settings or dataclass-based config
+- **JavaScript/TypeScript**: dotenv + validation library
+- **Rust**: config crate or dotenvy
+- **Go**: envconfig or viper
+
+## Configuration Hierarchy
+
+1. Environment variables (highest priority)
+2. \`.env\` file
+3. Default values in settings class
+
+## Protected Configuration Files
+
+- \`.env\` -- never commit, contains secrets
+- \`.env.example\` -- commit, contains placeholders only
+"
+
+  fi  # end full-profile-only rules
+
+  echo -e "  ${GREEN}DONE${NC}: .claude/rules/"
+}
+
+###############################################################################
+# Generate: CLAUDE.local.md (personal preferences template)
+###############################################################################
+generate_claude_local_md() {
+  echo -e "${YELLOW}Creating CLAUDE.local.md...${NC}"
+
+  write_file_if_new "CLAUDE.local.md" "# CLAUDE.local.md - Personal Preferences
+
+This file is for YOUR personal preferences and is git-ignored.
+Customize agent behavior without affecting the shared CLAUDE.md.
+
+## My Preferences
+
+<!-- Uncomment and customize any of these:
+
+### Response Style
+- Prefer concise responses
+- Show code diffs instead of full files
+- Always explain why before showing code
+
+### Development Workflow
+- I use vim keybindings
+- Run tests automatically after edits
+- Prefer feature branches over direct commits
+
+### Agent Behavior
+- Default to lite profile agents
+- Always ask before creating new files
+- Prefer editing existing files over creating new ones
+
+-->
+"
+}
+
+###############################################################################
+# Generate: Update .gitignore with CLAUDE.local.md
+###############################################################################
+update_gitignore() {
+  echo -e "${YELLOW}Updating .gitignore...${NC}"
+
+  if [ -f ".gitignore" ]; then
+    if grep -q "CLAUDE.local.md" ".gitignore" 2>/dev/null; then
+      echo -e "  ${YELLOW}EXISTS${NC}: CLAUDE.local.md already in .gitignore"
+      return
+    fi
+    # Append to existing .gitignore
+    echo "" >> ".gitignore"
+    echo "# Claude Code local preferences" >> ".gitignore"
+    echo "CLAUDE.local.md" >> ".gitignore"
+    echo -e "  ${GREEN}APPEND${NC}: CLAUDE.local.md added to .gitignore"
+  else
+    # Create .gitignore
+    echo "# Claude Code local preferences" > ".gitignore"
+    echo "CLAUDE.local.md" >> ".gitignore"
+    echo -e "  ${GREEN}CREATE${NC}: .gitignore"
+  fi
 }
 
 ###############################################################################
@@ -2609,6 +3176,13 @@ append_claude_md_section() {
 
 ${section_marker}
 
+## Rules Architecture
+
+Project rules are modular and path-scoped in \`.claude/rules/\`:
+- Rules load contextually based on which files you're editing
+- Each rule has YAML frontmatter with \`globs:\` for scoping
+- \`@imports\` in CLAUDE.md reference rules instead of duplicating content
+
 ## Task Routing
 
 | Request Pattern | Route To |
@@ -2627,12 +3201,7 @@ ${section_marker}
 
 ## Mandatory Practices
 
-1. **Grep Local Codebase FIRST**: Before writing ANY code, grep THIS project
-2. **Grep MCP**: Use \`grep_query\` to search GitHub for battle-tested code
-3. **LSP After Every Edit**: \`getDiagnostics\` after EVERY edit
-4. **Plan Before Execute**: Outline plan BEFORE non-trivial changes
-5. **Learn From Mistakes**: Read \`LEARNINGS.md\` at start, write learnings at end
-6. **Task Management**: ALL work tracked via TaskUpdate
+@.claude/rules/mandatory-practices.md
 
 ## Detected Commands
 
@@ -2657,6 +3226,17 @@ ${INSTALL_CMD:-# Install: not detected}
 ${INSTALL_CMD:+$INSTALL_CMD}
 \`\`\`
 
+## Project Structure
+
+\`\`\`
+${SRC_DIR}                     # Source code
+${TESTS_DIR}                    # Test suite
+.claude/agents/            # Agent definitions
+.claude/skills/            # Agent skills (progressive disclosure)
+.claude/rules/             # Path-scoped rules (modular)
+reports/                   # Agent output reports
+\`\`\`
+
 ## Protected Paths
 
 $(echo "$PROTECTED_PATHS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | while read -r p; do echo "- \`$p\`"; done)
@@ -2666,73 +3246,20 @@ $(echo "$PROTECTED_PATHS" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | while read -r 
 
 ${section_marker}
 
+## Rules Architecture
+
+Project rules are modular and path-scoped in \`.claude/rules/\`:
+- Rules load contextually based on which files you're editing
+- Each rule has YAML frontmatter with \`globs:\` for scoping
+- \`@imports\` in CLAUDE.md reference rules instead of duplicating content
+
 ## Task Routing
 
-| Request Pattern | Route To | Type |
-|----------------|----------|------|
-| \"build/implement/add [simple]\" | builder | Agent |
-| \"build/implement [complex]\" | feature-team-coordinator | Team |
-| \"review/check/audit\" | review-team-coordinator | Team |
-| \"test/verify\" | tester | Agent |
-| \"research/find/explore\" | research-swarm-coordinator | Team |
-| \"plan/design/decompose/PRD\" | prd-team-coordinator | Team |
-| \"document/explain\" | documenter | Agent |
-| \"debug/fix [simple]\" | builder | Agent |
-| \"debug/investigate [complex]\" | hypothesis-team-coordinator | Team |
-| \"refactor/migrate\" | plan-execute-coordinator | Team |
-| \"create agent/team/skill\" | system-architect | Agent |
-| \"assess risk\" | risk-assessor | Agent |
-
-## Agent Table
-
-### Core Agents (6)
-| Agent | Purpose | Model |
-|-------|---------|-------|
-| orchestrator | Routes tasks, manages workflow | opus |
-| builder | Writes code following existing patterns | sonnet |
-| reviewer | Code review + fix capability | sonnet |
-| tester | Runs tests, reports failures | sonnet |
-| researcher | Researches solutions and packages | sonnet |
-| documenter | Documentation and reference files | sonnet |
-
-### Team Coordinators (6)
-| Coordinator | Team | Purpose |
-|-------------|------|---------|
-| review-team-coordinator | Parallel Review | Coordinates parallel code reviews |
-| feature-team-coordinator | Cross-Layer Feature | Coordinates cross-module feature dev |
-| hypothesis-team-coordinator | Competing Hypotheses | Manages parallel investigation |
-| research-swarm-coordinator | Research Swarm | Coordinates parallel research |
-| plan-execute-coordinator | Plan-Then-Execute | Plans then coordinates execution |
-| prd-team-coordinator | PRD Decomposition | Decomposes PRDs into tasks |
-
-### Specialist Agents (7)
-| Agent | Purpose | Model |
-|-------|---------|-------|
-| skill-builder | Creates/modifies skills | sonnet |
-| requirements-extractor | Extracts structured requirements | sonnet |
-| technical-researcher | Codebase + tech research | sonnet |
-| architecture-designer | Architecture design | opus |
-| task-decomposer | Task breakdown | sonnet |
-| risk-assessor | Risk identification (read-only) | sonnet |
-| system-architect | Creates new agents/teams/skills | opus |
-
-## Agent Skills
-
-| Skill | Location | Used By |
-|-------|----------|---------|
-| coding-conventions | \`.claude/skills/coding-conventions/\` | all agents |
-| team-coordination | \`.claude/skills/team-coordination/\` | all coordinators |
-| security-standards | \`.claude/skills/security-standards/\` | reviewer, risk-assessor |
-| research-patterns | \`.claude/skills/research-patterns/\` | researcher, technical-researcher |
+@.claude/rules/agent-system.md
 
 ## Mandatory Practices
 
-1. **Grep Local Codebase FIRST**: Before writing ANY code, grep THIS project
-2. **Grep MCP**: Use \`grep_query\` to search GitHub for battle-tested code
-3. **LSP After Every Edit**: \`getDiagnostics\` after EVERY edit
-4. **Plan Before Execute**: Outline plan BEFORE non-trivial changes
-5. **Learn From Mistakes**: Read \`LEARNINGS.md\` at start, write learnings at end
-6. **Task Management**: ALL work tracked via TaskUpdate
+@.claude/rules/mandatory-practices.md
 
 ## Detected Commands
 
@@ -2755,6 +3282,18 @@ ${TYPE_CHECKER_CMD:+$TYPE_CHECKER_CMD}
 ${INSTALL_CMD:+# Install}
 ${INSTALL_CMD:-# Install: not detected}
 ${INSTALL_CMD:+$INSTALL_CMD}
+\`\`\`
+
+## Project Structure
+
+\`\`\`
+${SRC_DIR}                     # Source code
+${TESTS_DIR}                    # Test suite
+.claude/agents/            # 19 agent definitions
+.claude/skills/            # 4 agent skills (progressive disclosure)
+.claude/rules/             # 9 path-scoped rules (modular)
+team-registry/             # Team definitions and run logs
+reports/                   # Agent output reports
 \`\`\`
 
 ## Protected Paths
@@ -2792,6 +3331,9 @@ generate_lite() {
   generate_settings_json
   generate_learnings
   generate_reports_dir
+  generate_rules "lite"
+  generate_claude_local_md
+  update_gitignore
   generate_coding_conventions_skill
   generate_orchestrator
   generate_builder
@@ -2811,6 +3353,9 @@ generate_full() {
   generate_settings_json
   generate_learnings
   generate_reports_dir
+  generate_rules "full"
+  generate_claude_local_md
+  update_gitignore
 
   # Skills (4)
   generate_coding_conventions_skill
@@ -2906,6 +3451,7 @@ verify_setup() {
   local agent_count=0
   local skill_count=0
   local team_count=0
+  local rules_count=0
   local errors=0
 
   # Count agents
@@ -2923,9 +3469,15 @@ verify_setup() {
     team_count=$(find team-registry -maxdepth 1 -name "*-team.md" -type f 2>/dev/null | wc -l | tr -d ' ')
   fi
 
+  # Count rules
+  if [ -d ".claude/rules" ]; then
+    rules_count=$(find .claude/rules -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
+  fi
+
   # Verify critical files
   echo -e "  Agent files:      ${GREEN}${agent_count}${NC}"
   echo -e "  Skill files:      ${GREEN}${skill_count}${NC}"
+  echo -e "  Rules files:      ${GREEN}${rules_count}${NC}"
   echo -e "  Team definitions: ${GREEN}${team_count}${NC}"
 
   if [ -f ".claude/settings.json" ]; then
@@ -2965,12 +3517,18 @@ verify_setup() {
     if [ "$skill_count" -lt 1 ]; then
       echo -e "  ${YELLOW}WARN${NC}: Expected 1 skill, found ${skill_count}"
     fi
+    if [ "$rules_count" -lt 6 ]; then
+      echo -e "  ${YELLOW}WARN${NC}: Expected 6 rules, found ${rules_count}"
+    fi
   else
     if [ "$agent_count" -lt 19 ]; then
       echo -e "  ${YELLOW}WARN${NC}: Expected 19 agents, found ${agent_count}"
     fi
     if [ "$skill_count" -lt 4 ]; then
       echo -e "  ${YELLOW}WARN${NC}: Expected 4 skills, found ${skill_count}"
+    fi
+    if [ "$rules_count" -lt 9 ]; then
+      echo -e "  ${YELLOW}WARN${NC}: Expected 9 rules, found ${rules_count}"
     fi
     if [ "$team_count" -lt 6 ]; then
       echo -e "  ${YELLOW}WARN${NC}: Expected 6 team definitions, found ${team_count}"

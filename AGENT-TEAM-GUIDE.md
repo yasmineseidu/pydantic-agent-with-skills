@@ -36,6 +36,14 @@ After install, type any of these into Claude Code:
 
 If the agent name appears in the output header, it is working.
 
+### Customize Your Rules
+
+After install, personalize your rules:
+
+1. Edit `.claude/rules/coding-principles.md` for your coding standards
+2. Edit `.claude/rules/testing-patterns.md` for your test patterns
+3. Create `CLAUDE.local.md` for personal preferences (auto-gitignored)
+
 ---
 
 ## How It Works (2-minute overview)
@@ -62,6 +70,12 @@ YOU (type a request in Claude Code)
 +--------------------------------------------------------------+
 |                    SKILLS (shared knowledge)                  |
 |  coding-conventions | team-coordination | security-standards  |
++--------------------------------------------------------------+
+ |
+ v
++--------------------------------------------------------------+
+|                    RULES (.claude/rules/)                     |
+|  9 path-scoped files loaded contextually per task             |
 +--------------------------------------------------------------+
  |
  v
@@ -114,6 +128,58 @@ Your Request
      |
      +-- unclear/complex ---------> orchestrator asks YOU
 ```
+
+---
+
+## Modern Memory Architecture
+
+### The Rules System
+
+Instead of one massive instruction file, the system uses modular rules that load contextually:
+
+```
++---------------------------------------------------------------+
+|                    .claude/rules/ (9 files)                    |
+|                                                                |
+|  mandatory-practices.md  -- Always loaded (all files)          |
+|  coding-principles.md    -- Loaded when editing src/ or tests/ |
+|  common-pitfalls.md      -- Loaded when editing source code    |
+|  testing-patterns.md     -- Loaded when editing tests          |
+|  agent-system.md         -- Loaded when editing agents/teams   |
+|  skill-system.md         -- Loaded when editing skills         |
+|  configuration.md        -- Loaded when editing config files   |
+|  documentation-style.md  -- Loaded when editing .py or .md     |
+|  security.md             -- Loaded when editing source code    |
++---------------------------------------------------------------+
+```
+
+**Why this matters**: Agents only see rules relevant to what they're working on. An agent editing tests sees testing-patterns.md but not configuration.md. This keeps context focused and reduces noise.
+
+### How It Connects
+
+```
+CLAUDE.md (compact, ~300 lines)
+  |
+  +-- @.claude/rules/coding-principles.md    (loaded via @import)
+  +-- @.claude/rules/mandatory-practices.md  (loaded via @import)
+  +-- @.claude/rules/agent-system.md         (loaded via @import)
+  +-- @.claude/rules/security.md             (loaded via @import)
+  +-- ... (5 more @imports)
+  |
+  +-- .claude/skills/ (deep-dive reference, loaded on demand)
+```
+
+### CLAUDE.local.md (Personal Preferences)
+
+Create `CLAUDE.local.md` in the project root for personal preferences that don't belong in version control:
+
+```markdown
+# Local Preferences
+- Preferred model: opus for planning, sonnet for execution
+- Always show file:line references in responses
+```
+
+This file is automatically gitignored by the setup script.
 
 ---
 
@@ -520,6 +586,11 @@ Edit these files with your language, tools, and conventions:
 | Protected paths | `.claude/agents/orchestrator.md` + `CLAUDE.md` |
 | Naming conventions | `.claude/skills/coding-conventions/SKILL.md` |
 | Error handling patterns | `.claude/skills/coding-conventions/SKILL.md` |
+| Mandatory practices | `.claude/rules/mandatory-practices.md` |
+| Coding principles | `.claude/rules/coding-principles.md` |
+| Security rules | `.claude/rules/security.md` |
+| Test patterns | `.claude/rules/testing-patterns.md` |
+| Personal preferences | `CLAUDE.local.md` (gitignored) |
 
 ### Adding a New Agent
 
@@ -677,6 +748,17 @@ your-project/
 |   |   +-- security-standards/      <-- OWASP-adapted security checks
 |   |   +-- research-patterns/       <-- Research methodology
 |   |
+|   +-- rules/                         <-- Modular path-scoped rules (9 files)
+|   |   +-- mandatory-practices.md     <-- 6 NON-NEGOTIABLE practices
+|   |   +-- coding-principles.md       <-- Type safety, KISS, YAGNI
+|   |   +-- common-pitfalls.md         <-- Critical mistakes to avoid
+|   |   +-- testing-patterns.md        <-- Test runner patterns, mocks
+|   |   +-- agent-system.md            <-- Routing, agent table, teams
+|   |   +-- skill-system.md            <-- Progressive disclosure, SKILL.md format
+|   |   +-- configuration.md           <-- Environment vars, settings
+|   |   +-- documentation-style.md     <-- Docstring format
+|   |   +-- security.md               <-- Path traversal, secrets, validation
+|   |
 |   +-- settings.json                <-- MCP servers + custom instructions
 |
 +-- team-registry/                   <-- Team definitions
@@ -696,6 +778,7 @@ your-project/
 |
 +-- LEARNINGS.md                     <-- Shared memory across sessions
 +-- CLAUDE.md                        <-- Project instructions + agent routing
++-- CLAUDE.local.md                  <-- Personal preferences (gitignored)
 ```
 
 ### What Each Directory Does
@@ -704,6 +787,7 @@ your-project/
 |-----------|---------|-----------------|
 | `.claude/agents/` | Agent behavior definitions | system-architect |
 | `.claude/skills/` | Shared knowledge loaded on demand | skill-builder, system-architect |
+| `.claude/rules/` | Path-scoped rules loaded contextually | system-architect, setup script |
 | `team-registry/` | Team composition and execution patterns | orchestrator, coordinators |
 | `reports/` | Agent output: reviews, PRDs, pipeline logs | all agents |
 | `LEARNINGS.md` | Persistent memory across sessions | all agents (append-only) |
@@ -771,6 +855,8 @@ your-project/
 |  ---------                                                         |
 |  Agent definitions:   .claude/agents/*.md                          |
 |  Skills:              .claude/skills/*/SKILL.md                    |
+|  Rules (modular):     .claude/rules/*.md                           |
+|  Personal prefs:      CLAUDE.local.md                              |
 |  Team definitions:    team-registry/*.md                           |
 |  Shared memory:       LEARNINGS.md                                 |
 |  Agent routing:       CLAUDE.md (Agent Team System section)        |
@@ -797,5 +883,4 @@ your-project/
 
 ---
 
-*For build instructions, see `agent-team-build-lite.md` (3 agents) or
-`agent-team-build-greenfield.md` (19 agents).*
+*For build instructions, see `agent-team-build-lite.md` (3 agents) or `agent-team-build-greenfield.md` (19 agents). Rules architecture in `.claude/rules/`.*
