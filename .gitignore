@@ -30,6 +30,14 @@ htmlcov/
 # Environment
 .env
 
+# Secrets and certificates
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+credentials.json
+
 # UV
 .uv/
 
