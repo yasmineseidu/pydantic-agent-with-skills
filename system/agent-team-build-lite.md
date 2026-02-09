@@ -52,6 +52,7 @@ Lite (3 agents)                    Full (19 agents)
 - `{RUN_COMMAND}` - how to run the app (e.g., `python -m src.cli`)
 - `{INSTALL_COMMAND}` - how to install deps (e.g., `uv pip install -e .`)
 - `{PROTECTED_PATHS}` - paths that should never be modified (e.g., `examples/`, `.env`)
+- `{LANG_EXT}` - file extension for the language (e.g., `py`, `ts`, `go`, `rs`, `java`)
 
 ---
 
@@ -66,19 +67,27 @@ Minimal structure for the 3-agent system. Phases below populate each directory.
 │   │   ├── orchestrator.md
 │   │   ├── builder.md
 │   │   └── tester.md
-│   ├── skills/                    # 1 skill (Phase 2)
+│   ├── rules/                     # 6 path-scoped rules (Phase 2a)
+│   │   ├── mandatory-practices.md
+│   │   ├── coding-principles.md
+│   │   ├── common-pitfalls.md
+│   │   ├── testing-patterns.md
+│   │   ├── documentation-style.md
+│   │   └── security.md
+│   ├── skills/                    # 1 skill (Phase 2b)
 │   │   └── coding-conventions/
 │   │       └── SKILL.md
 │   └── settings.json              # MCP + custom instructions (Phase 1)
 ├── reports/                       # Hook output
 │   └── .pipeline-log
-├── learnings.md                   # Shared learning across agents (Phase 5)
-└── CLAUDE.md                      # Project instructions with agent integration (Phase 4)
+├── CLAUDE.local.md                # Personal preferences (gitignored)
+├── learnings.md                   # Shared learning across agents (Phase 6)
+└── CLAUDE.md                      # Project instructions with agent integration (Phase 5)
 ```
 
 Create directories now:
 ```bash
-mkdir -p .claude/agents .claude/skills/coding-conventions reports
+mkdir -p .claude/agents .claude/rules .claude/skills/coding-conventions reports
 ```
 
 ---
@@ -89,7 +98,7 @@ mkdir -p .claude/agents .claude/skills/coding-conventions reports
 
 ```json
 {
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (6 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
@@ -108,7 +117,7 @@ ADD these keys to the existing file (merge, don't overwrite):
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (6 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
@@ -120,7 +129,266 @@ ADD these keys to the existing file (merge, don't overwrite):
 
 ---
 
-## 4. PHASE 2: SKILL
+## 4a. PHASE 2a: RULES
+
+### Modern Memory Architecture
+
+The rules system provides modular, path-scoped configuration files that load contextually based on which files you're editing. Each rule has YAML frontmatter with `globs:` for file scoping.
+
+**Lite profile creates 6 rules** (full system adds 3 more: agent-system, skill-system, configuration):
+
+Create all 6 rule files:
+
+### File: `.claude/rules/mandatory-practices.md`
+
+```markdown
+---
+description: Non-negotiable practices enforced on every agent and every session.
+globs:
+  - "**"
+---
+
+# Mandatory Practices
+
+These 6 practices are NON-NEGOTIABLE. Every agent, every session.
+
+## 1. Grep Local Codebase FIRST
+
+Before writing ANY code, grep THIS project to study existing patterns.
+
+## 2. Grep MCP (grep-mcp)
+
+AFTER grepping local, use `grep_query` to search millions of GitHub repos.
+
+```
+grep_query: query="{feature} {framework}", language="{LANGUAGE}"
+```
+
+Skip ONLY for typo fixes or < 5 lines changed.
+
+## 3. LSP After Every Edit
+
+- `getDiagnostics` after EVERY edit -- fix errors immediately
+- `goToDefinition` before modifying any function
+- `findReferences` before renaming or refactoring
+
+## 4. Plan Before Execute
+
+Outline plan BEFORE non-trivial changes. Skip only for single-line fixes.
+
+## 5. Learn From Mistakes
+
+- Read `LEARNINGS.md` at session start
+- Write learnings at session end
+- Format: `CATEGORY: what -> fix/reuse` (1 line, max 120 chars)
+
+## 6. Task Management
+
+- `TaskUpdate: in_progress` when starting work
+- `TaskUpdate: completed` only after ALL verification passes
+- NEVER mark complete if tests fail or errors remain
+
+## Additional Practices
+
+- **Read before write**: Always read existing files before modifying
+- **Match patterns**: Follow existing codebase conventions exactly
+- **Type everything**: Full type annotations, no exceptions
+- **Test after change**: Run `{TEST_RUNNER_COMMAND}` after any code change
+- **Lint after change**: Run `{LINTER_COMMAND}` after any code change
+- **Respect ownership**: Only modify files you own
+```
+
+### File: `.claude/rules/coding-principles.md`
+
+```markdown
+---
+description: Core coding principles for all source and test code.
+globs:
+  - "{SRC_DIR}**"
+  - "{TESTS_DIR}**"
+---
+
+# Coding Principles
+
+## Type Safety Is Non-Negotiable
+
+- All functions, methods, and variables MUST have type annotations
+- No `Any` types without explicit justification
+- Use validated data models for all structured data
+
+## KISS (Keep It Simple)
+
+- Prefer simple, readable solutions over clever abstractions
+- Don't build fallback mechanisms unless absolutely necessary
+
+## YAGNI (You Aren't Gonna Need It)
+
+- Don't build features until they're actually needed
+- MVP first, enhancements later
+
+## Error Handling
+
+- Catch specific exceptions first, then general
+- Return error strings from tool functions (don't raise) where applicable
+- Use structured logging: `"action_name: key={value}"`
+- Never swallow errors silently
+
+## Import Ordering
+
+Follow existing import ordering in the project. Verify by reading existing files before writing new code.
+```
+
+### File: `.claude/rules/common-pitfalls.md`
+
+```markdown
+---
+description: Common mistakes to avoid when writing code.
+globs:
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Common Pitfalls
+
+## 1. Assuming File Contents
+**Wrong**: Writing code that assumes a file's structure without reading it.
+**Right**: Always `Read` the target file before modifying.
+
+## 2. Inventing APIs
+**Wrong**: Calling functions or methods that you assume exist.
+**Right**: Use `Grep` to verify the API exists. Use `LSP goToDefinition` to check signatures.
+
+## 3. Missing Type Hints
+**Wrong**: Functions without type annotations.
+**Right**: Full type annotations on all functions, parameters, and return values.
+
+## 4. Not Initializing Dependencies
+**Wrong**: Using dependencies that haven't been initialized.
+**Right**: Call initialization methods before using any injected dependency.
+
+## 5. Silent Fallbacks
+**Wrong**: `if X fails, try Y instead` without telling anyone.
+**Right**: Fail loudly. Report the exact error and ask how to proceed.
+
+## 6. Creating Duplicates
+**Wrong**: Writing a utility function that already exists elsewhere.
+**Right**: Grep the codebase first. Reuse existing code.
+```
+
+### File: `.claude/rules/testing-patterns.md`
+
+```markdown
+---
+description: Testing conventions and patterns.
+globs:
+  - "{TESTS_DIR}**"
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Testing Patterns
+
+## Test Infrastructure
+
+- **Runner**: {TEST_RUNNER}
+- **Test directory**: `{TESTS_DIR}`
+- **Run command**: `{TEST_RUNNER_COMMAND}`
+
+## Test Structure
+
+Tests mirror the source directory:
+```
+{SRC_DIR}module.{LANG_EXT}  ->  {TESTS_DIR}test_module.{LANG_EXT}
+```
+
+## Failure Reporting
+
+When tests fail, report EACH failure as:
+```
+### FAILURE: test_name
+- **File**: {TESTS_DIR}test_file:line
+- **Source**: {SRC_DIR}module:line (the failing code)
+- **Error**: ExactErrorMessage
+- **Suggested Fix**: What should change
+- **Severity**: CRITICAL|HIGH|MEDIUM|LOW
+```
+
+## Verification Checklist
+
+Before marking any task complete:
+- [ ] All existing tests pass: `{TEST_RUNNER_COMMAND}`
+- [ ] New tests written for new functionality
+- [ ] Edge cases covered
+```
+
+### File: `.claude/rules/documentation-style.md`
+
+```markdown
+---
+description: Documentation and docstring conventions.
+globs:
+  - "**/*.{LANG_EXT}"
+  - "**/*.md"
+---
+
+# Documentation Style
+
+## Docstring Format
+
+Follow the project's existing documentation style. Common formats:
+- **Python**: Google-style docstrings (Args/Returns/Raises)
+- **JavaScript/TypeScript**: JSDoc with @param/@returns/@throws
+- **Rust**: Doc comments with /// and # Examples
+- **Go**: Package comments with godoc conventions
+
+## When to Document
+
+- All public functions, classes, and modules
+- Complex internal logic
+- Non-obvious business rules
+```
+
+### File: `.claude/rules/security.md`
+
+```markdown
+---
+description: Security requirements for all source code.
+globs:
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Security Standards
+
+## Secrets Management
+
+- ALL secrets in `.env` file only
+- Access via settings/config objects -- never read env vars directly
+- `.env.example` must use PLACEHOLDER values, never real keys
+- Never log passwords, tokens, or API keys
+
+## Path Traversal Prevention
+
+- Validate file paths are within expected directories
+- Use resolve() + is_relative_to() or equivalent
+- Never construct file paths from unvalidated user input
+
+## Input Validation
+
+- Validate type, length, and format before using any input
+- Timeout all HTTP requests
+- Truncate large responses
+
+## Security Review Checklist
+
+1. [ ] No hardcoded secrets
+2. [ ] File paths validated for traversal
+3. [ ] HTTP requests use timeouts
+4. [ ] No eval/exec with dynamic input
+5. [ ] Logging doesn't include secret values
+6. [ ] Error messages don't leak internal paths
+```
+
+---
+
+## 4b. PHASE 2b: SKILL
 
 ### Coding Conventions (Lite): `.claude/skills/coding-conventions/SKILL.md`
 
@@ -407,6 +675,48 @@ TaskUpdate: status = "completed"
 8. **{TYPE_CHECKER}**: Type errors block commits
 9. **{TEST_RUNNER}**: Test failures block merges
 10. **This skill**: Agents reference before writing code
+```
+
+---
+
+## 4c. PHASE 2c: PERSONAL PREFERENCES
+
+### File: `CLAUDE.local.md`
+
+Personal preferences file, gitignored by default. Each developer can customize without affecting shared config.
+
+```markdown
+# CLAUDE.local.md - Personal Preferences
+
+This file is for YOUR personal preferences and is git-ignored.
+Customize agent behavior without affecting the shared CLAUDE.md.
+
+## My Preferences
+
+<!-- Uncomment and customize any of these:
+
+### Response Style
+- Prefer concise responses
+- Show code diffs instead of full files
+
+### Development Workflow
+- Run tests automatically after edits
+- Prefer feature branches over direct commits
+
+### Agent Behavior
+- Default to lite profile agents
+- Always ask before creating new files
+-->
+```
+
+### Update `.gitignore`
+
+Add `CLAUDE.local.md` to your `.gitignore`:
+
+```bash
+echo "" >> .gitignore
+echo "# Claude Code local preferences" >> .gitignore
+echo "CLAUDE.local.md" >> .gitignore
 ```
 
 ---
@@ -923,7 +1233,7 @@ When tests fail, report EACH failure as:
 
 ---
 
-## 6. PHASE 4: CLAUDE.MD INTEGRATION
+## 6. PHASE 5: CLAUDE.MD INTEGRATION
 
 Add this section to your project's `CLAUDE.md`. This is the agent team integration
 block that enables routing and coordination.
@@ -932,6 +1242,13 @@ block that enables routing and coordination.
 
 ```markdown
 # Agent Team System (Lite)
+
+## Rules Architecture
+
+Project rules are modular and path-scoped in `.claude/rules/`:
+- Rules load contextually based on which files you're editing
+- Each rule has YAML frontmatter with `globs:` for scoping
+- `@imports` in CLAUDE.md reference rules instead of duplicating content
 
 This is an existing codebase. Agents build AROUND existing code. Never modify existing patterns without explicit instruction.
 
@@ -961,12 +1278,8 @@ This is an existing codebase. Agents build AROUND existing code. Never modify ex
 
 ## Mandatory Practices
 
-1. **Grep Local Codebase FIRST (NON-NEGOTIABLE)**: Before writing ANY code, grep THIS project
-2. **Grep MCP (NON-NEGOTIABLE)**: Use `grep_query` to search GitHub for battle-tested code
-3. **LSP After Every Edit (NON-NEGOTIABLE)**: `getDiagnostics` after EVERY edit
-4. **Plan Before Execute (NON-NEGOTIABLE)**: Written plan before non-trivial changes
-5. **Learn From Mistakes (NON-NEGOTIABLE)**: Read `LEARNINGS.md` at start, write at end
-6. **Task Management (NON-NEGOTIABLE)**: TaskUpdate in_progress/completed for all work
+@.claude/rules/mandatory-practices.md
+
 7. **Read before write**: Always read existing files before modifying
 8. **Match patterns**: Follow existing codebase conventions exactly
 9. **Type everything**: Full type annotations, no exceptions
@@ -992,6 +1305,17 @@ These paths must NEVER be modified by any agent:
 {INSTALL_COMMAND}          # Install dependencies
 ```
 
+## Project Structure
+
+```
+{SRC_DIR}                     # Source code
+{TESTS_DIR}                    # Test suite
+.claude/agents/            # Agent definitions
+.claude/skills/            # Agent skills (progressive disclosure)
+.claude/rules/             # 6 path-scoped rules (modular)
+reports/                   # Agent output reports
+```
+
 ## Retry Limits
 
 | Operation | Max Retries | On Failure |
@@ -1002,7 +1326,7 @@ These paths must NEVER be modified by any agent:
 
 ---
 
-## 7. PHASE 5: SUPPORT FILES
+## 7. PHASE 6: SUPPORT FILES
 
 ### File: `learnings.md`
 
@@ -1045,10 +1369,24 @@ After completing all phases, verify:
 - [ ] `.claude/settings.json` exists with `grep-mcp` server and `customInstructions`
 - [ ] `~/.claude/settings.json` has `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` env var set to `"1"`
 
-### Skill (Phase 2)
+### Rules (Phase 2a)
+- [ ] `.claude/rules/` directory contains exactly 6 `.md` files
+- [ ] `mandatory-practices.md` has `globs: ["**"]`
+- [ ] `coding-principles.md` has `globs:` with `{SRC_DIR}` and `{TESTS_DIR}`
+- [ ] `common-pitfalls.md` has `globs:` with `{SRC_DIR}**/*.{LANG_EXT}`
+- [ ] `testing-patterns.md` has `globs:` with `{TESTS_DIR}**`
+- [ ] `documentation-style.md` has `globs:` with `**/*.{LANG_EXT}` and `**/*.md`
+- [ ] `security.md` has `globs:` with `{SRC_DIR}**/*.{LANG_EXT}`
+- [ ] All `{PLACEHOLDER}` values have been replaced
+
+### Skill (Phase 2b)
 - [ ] `.claude/skills/coding-conventions/SKILL.md` exists
 - [ ] Skill has valid YAML frontmatter (name, description, version, author)
 - [ ] All `{PLACEHOLDER}` values have been replaced with project-specific values
+
+### Personal Preferences
+- [ ] `CLAUDE.local.md` exists
+- [ ] `CLAUDE.local.md` is listed in `.gitignore`
 
 ### Agents (Phase 3) - 3 agents
 - [ ] `.claude/agents/orchestrator.md` exists
@@ -1083,17 +1421,20 @@ After completing all phases, verify:
 - [ ] Builder has `LSP` in tools + PostToolUse format hooks
 - [ ] Builder has `WebSearch` and `WebFetch` in tools
 
-### CLAUDE.md Integration (Phase 4)
+### CLAUDE.md Integration (Phase 5)
 - [ ] Agent Team System (Lite) section added to CLAUDE.md
+- [ ] Rules Architecture section present
+- [ ] `@.claude/rules/mandatory-practices.md` import present
 - [ ] Routing table lists all 3 agents with correct routing
 - [ ] Agent table lists all 3 agents with tools and hooks
 - [ ] Skills table lists coding-conventions
-- [ ] Mandatory practices section (6 non-negotiable + additional)
+- [ ] Mandatory practices section with @import + additional items 7-13
+- [ ] Project Structure section present
 - [ ] Protected paths listed
 - [ ] Detected commands with correct placeholders replaced
 - [ ] Retry limits table
 
-### Support Files (Phase 5)
+### Support Files (Phase 6)
 - [ ] `learnings.md` exists with section headers
 - [ ] `reports/` directory exists
 
@@ -1114,6 +1455,7 @@ How to grow from the 3-agent lite system to the full 19-agent system.
 Stage 0: Lite (3 agents)        <- YOU ARE HERE
   orchestrator, builder, tester
   1 skill (coding-conventions)
+  6 rules in .claude/rules/
 
 Stage 1: +Review (5 agents)
   + reviewer
@@ -1133,6 +1475,7 @@ Stage 3: +Coordinators (13 agents)
   + prd-team-coordinator
   + skill-builder
   + team-coordination skill
+  + 3 additional rules (agent-system, skill-system, configuration)
 
 Stage 4: +Specialists (19 agents)
   + system-architect
@@ -1218,7 +1561,8 @@ Stage 4: +Specialists (19 agents)
 
 ### Getting the Full Templates
 
-The complete templates for all 19 agents, 4 skills, 6 team definitions, and all
+The complete templates for all 19 agents, 4 skills, 9 rules (6 from lite + 3 from
+Stage 3: agent-system, skill-system, configuration), 6 team definitions, and all
 supporting infrastructure are in:
 
 - **`agent-team-build-greenfield.md`** -- Build from scratch (new projects)

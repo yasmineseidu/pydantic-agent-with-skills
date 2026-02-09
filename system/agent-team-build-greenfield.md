@@ -33,6 +33,7 @@ Build a persistent 19-agent team system for Claude Code from scratch. This file 
 - `{INSTALL_COMMAND}` - how to install deps (e.g., `uv pip install -e .`)
 - `{PROTECTED_PATHS}` - paths that should never be modified (e.g., `examples/`, `.env`)
 - `{EXAMPLES_DIR}` - reference/examples directory if any (e.g., `examples/`)
+- `{LANG_EXT}` - file extension for the language (e.g., `py`, `ts`, `go`, `rs`, `java`)
 
 ---
 
@@ -72,6 +73,16 @@ Create this structure. Phases below populate each directory.
 │   │   │   └── SKILL.md
 │   │   └── research-patterns/
 │   │       └── SKILL.md
+│   ├── rules/                     # 9 path-scoped rules (Phase 1b)
+│   │   ├── mandatory-practices.md
+│   │   ├── coding-principles.md
+│   │   ├── common-pitfalls.md
+│   │   ├── testing-patterns.md
+│   │   ├── documentation-style.md
+│   │   ├── security.md
+│   │   ├── agent-system.md
+│   │   ├── skill-system.md
+│   │   └── configuration.md
 │   └── settings.json              # MCP + custom instructions (Phase 1)
 ├── team-registry/                 # Team definitions (Phase 6)
 │   ├── README.md
@@ -85,13 +96,14 @@ Create this structure. Phases below populate each directory.
 │   └── run-logs/                  # Created by coordinators after runs
 ├── reports/                       # Created by teams during execution
 │   └── .pipeline-log              # Hook output
+├── CLAUDE.local.md                # Personal preferences (gitignored)
 ├── learnings.md                   # Shared learning across agents (Phase 8)
 └── CLAUDE.md                      # Project instructions with agent integration (Phase 7)
 ```
 
 Create directories now:
 ```bash
-mkdir -p .claude/agents .claude/skills/coding-conventions .claude/skills/team-coordination .claude/skills/security-standards .claude/skills/research-patterns team-registry/run-logs reports
+mkdir -p .claude/agents .claude/rules .claude/skills/coding-conventions .claude/skills/team-coordination .claude/skills/security-standards .claude/skills/research-patterns team-registry/run-logs reports
 ```
 
 ---
@@ -102,7 +114,7 @@ mkdir -p .claude/agents .claude/skills/coding-conventions .claude/skills/team-co
 
 ```json
 {
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (9 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
@@ -121,7 +133,7 @@ ADD these keys to the existing file (merge, don't overwrite):
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
-  "customInstructions": "MANDATORY: Grep local codebase FIRST. Then use grep-mcp (grep_query tool) to search GitHub for battle-tested patterns. NEVER write substantial code without grepping both local and GitHub. Keep LEARNINGS.md entries to 1 line, max 120 chars.",
+  "customInstructions": "MANDATORY: Follow .claude/rules/mandatory-practices.md. Grep local codebase FIRST, then grep-mcp. Rules are in .claude/rules/ (9 path-scoped files). Keep LEARNINGS.md entries to 1 line, max 120 chars.",
   "mcpServers": {
     "grep-mcp": {
       "command": "uvx",
@@ -129,6 +141,414 @@ ADD these keys to the existing file (merge, don't overwrite):
     }
   }
 }
+```
+
+---
+
+## 3b. PHASE 1b: RULES
+
+### Modern Memory Architecture
+
+The rules system provides modular, path-scoped configuration files that load contextually based on which files you're editing. Each rule has YAML frontmatter with `globs:` for file scoping.
+
+**Full system creates 9 rules** (6 shared with lite profile + 3 full-only):
+
+Create `.claude/rules/` with all 9 rule files:
+
+### File 1: `.claude/rules/mandatory-practices.md`
+
+<!-- Same 6 NON-NEGOTIABLE practices as the coding-conventions skill, but in rule form
+     for automatic contextual loading. Globs: ** means always loaded. -->
+
+```markdown
+---
+description: Non-negotiable practices enforced on every agent and every session.
+globs:
+  - "**"
+---
+
+# Mandatory Practices
+
+These 6 practices are NON-NEGOTIABLE. Every agent, every session.
+
+## 1. Grep Local Codebase FIRST
+
+Before writing ANY code, grep THIS project to study existing patterns.
+
+## 2. Grep MCP (grep-mcp)
+
+AFTER grepping local, use `grep_query` to search millions of GitHub repos.
+```
+grep_query: query="{feature} {framework}", language="{LANGUAGE}"
+```
+Skip ONLY for typo fixes or < 5 lines changed.
+
+## 3. LSP After Every Edit
+
+- `getDiagnostics` after EVERY edit -- fix errors immediately
+- `goToDefinition` before modifying any function
+- `findReferences` before renaming or refactoring
+
+## 4. Plan Before Execute
+
+Outline plan BEFORE non-trivial changes. Skip only for single-line fixes.
+
+## 5. Learn From Mistakes
+
+- Read `LEARNINGS.md` at session start
+- Write learnings at session end
+- Format: `CATEGORY: what -> fix/reuse` (1 line, max 120 chars)
+
+## 6. Task Management
+
+- `TaskUpdate: in_progress` when starting work
+- `TaskUpdate: completed` only after ALL verification passes
+- NEVER mark complete if tests fail or errors remain
+
+## Additional Practices
+
+- **Read before write**: Always read existing files before modifying
+- **Match patterns**: Follow existing codebase conventions exactly
+- **Type everything**: Full type annotations, no exceptions
+- **Test after change**: Run `{TEST_RUNNER_COMMAND}` after any code change
+- **Lint after change**: Run `{LINTER_COMMAND}` after any code change
+- **Respect ownership**: Only modify files you own
+```
+
+### File 2: `.claude/rules/coding-principles.md`
+
+```markdown
+---
+description: Core coding principles for all source and test code.
+globs:
+  - "{SRC_DIR}**"
+  - "{TESTS_DIR}**"
+---
+
+# Coding Principles
+
+## Type Safety Is Non-Negotiable
+- All functions, methods, and variables MUST have type annotations
+- No `Any` types without explicit justification
+
+## KISS (Keep It Simple)
+- Prefer simple, readable solutions over clever abstractions
+
+## YAGNI (You Aren't Gonna Need It)
+- Don't build features until they're actually needed
+
+## Error Handling
+- Catch specific exceptions first, then general
+- Return error strings from tool functions (don't raise) where applicable
+- Use structured logging: `"action_name: key={value}"`
+
+## Import Ordering
+Follow existing import ordering in the project.
+```
+
+### File 3: `.claude/rules/common-pitfalls.md`
+
+```markdown
+---
+description: Common mistakes to avoid when writing code.
+globs:
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Common Pitfalls
+
+## 1. Assuming File Contents
+**Wrong**: Writing code that assumes a file's structure without reading it.
+**Right**: Always `Read` the target file before modifying.
+
+## 2. Inventing APIs
+**Wrong**: Calling functions or methods that you assume exist.
+**Right**: Use `Grep` to verify. Use `LSP goToDefinition` to check signatures.
+
+## 3. Missing Type Hints
+**Wrong**: Functions without type annotations.
+**Right**: Full type annotations on all functions, parameters, and return values.
+
+## 4. Not Initializing Dependencies
+**Wrong**: Using dependencies that haven't been initialized.
+**Right**: Call initialization methods before using any injected dependency.
+
+## 5. Silent Fallbacks
+**Wrong**: `if X fails, try Y instead` without telling anyone.
+**Right**: Fail loudly. Report the exact error and ask how to proceed.
+
+## 6. Creating Duplicates
+**Wrong**: Writing a utility function that already exists elsewhere.
+**Right**: Grep the codebase first. Reuse existing code.
+```
+
+### File 4: `.claude/rules/testing-patterns.md`
+
+```markdown
+---
+description: Testing conventions and patterns.
+globs:
+  - "{TESTS_DIR}**"
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Testing Patterns
+
+## Test Infrastructure
+- **Runner**: {TEST_RUNNER}
+- **Test directory**: `{TESTS_DIR}`
+- **Run command**: `{TEST_RUNNER_COMMAND}`
+
+## Test Structure
+Tests mirror the source directory:
+```
+{SRC_DIR}module.{LANG_EXT}  ->  {TESTS_DIR}test_module.{LANG_EXT}
+```
+
+## Failure Reporting
+When tests fail, report EACH failure as:
+```
+### FAILURE: test_name
+- **File**: {TESTS_DIR}test_file:line
+- **Source**: {SRC_DIR}module:line
+- **Error**: ExactErrorMessage
+- **Suggested Fix**: What should change
+- **Severity**: CRITICAL|HIGH|MEDIUM|LOW
+```
+```
+
+### File 5: `.claude/rules/documentation-style.md`
+
+```markdown
+---
+description: Documentation and docstring conventions.
+globs:
+  - "**/*.{LANG_EXT}"
+  - "**/*.md"
+---
+
+# Documentation Style
+
+Follow the project's existing documentation style. Common formats:
+- **Python**: Google-style docstrings (Args/Returns/Raises)
+- **JavaScript/TypeScript**: JSDoc
+- **Rust**: Doc comments with ///
+- **Go**: godoc conventions
+
+## When to Document
+- All public functions, classes, and modules
+- Complex internal logic
+- Non-obvious business rules
+```
+
+### File 6: `.claude/rules/security.md`
+
+```markdown
+---
+description: Security requirements for all source code.
+globs:
+  - "{SRC_DIR}**/*.{LANG_EXT}"
+---
+
+# Security Standards
+
+## Secrets Management
+- ALL secrets in `.env` file only
+- Access via settings/config objects
+- Never log passwords, tokens, or API keys
+
+## Path Traversal Prevention
+- Validate file paths are within expected directories
+- Use resolve() + is_relative_to() or equivalent
+
+## Security Review Checklist
+1. [ ] No hardcoded secrets
+2. [ ] File paths validated for traversal
+3. [ ] HTTP requests use timeouts
+4. [ ] No eval/exec with dynamic input
+5. [ ] Logging doesn't include secret values
+```
+
+### File 7 (full-only): `.claude/rules/agent-system.md`
+
+```markdown
+---
+description: Agent team routing, structure, and operational rules.
+globs:
+  - ".claude/agents/**"
+  - "team-registry/**"
+---
+
+# Agent Team System
+
+## Task Routing
+
+| Request Pattern | Route To | Type |
+|----------------|----------|------|
+| "build/implement/add [simple]" | builder | Agent |
+| "build/implement [complex]" | feature-team-coordinator | Team |
+| "review/check/audit" | review-team-coordinator | Team |
+| "test/verify" | tester | Agent |
+| "research/find/explore" | research-swarm-coordinator | Team |
+| "plan/design/decompose/PRD" | prd-team-coordinator | Team |
+| "document/explain" | documenter | Agent |
+| "debug/fix [simple]" | builder | Agent |
+| "debug/investigate [complex]" | hypothesis-team-coordinator | Team |
+| "refactor/migrate" | plan-execute-coordinator | Team |
+| "create agent/team/skill" | system-architect | Agent |
+| "assess risk" | risk-assessor | Agent |
+
+## Agent Table
+
+### Core Agents (6)
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| orchestrator | Routes tasks, manages workflow | opus |
+| builder | Writes code following existing patterns | sonnet |
+| reviewer | Code review + fix capability | sonnet |
+| tester | Runs tests, reports failures | sonnet |
+| researcher | Researches solutions and packages | sonnet |
+| documenter | Documentation and reference files | sonnet |
+
+### Team Coordinators (6)
+| Coordinator | Team | Purpose |
+|-------------|------|---------|
+| review-team-coordinator | Parallel Review | Coordinates code reviews |
+| feature-team-coordinator | Cross-Layer Feature | Coordinates feature dev |
+| hypothesis-team-coordinator | Competing Hypotheses | Parallel investigation |
+| research-swarm-coordinator | Research Swarm | Parallel research |
+| plan-execute-coordinator | Plan-Then-Execute | Plans then executes |
+| prd-team-coordinator | PRD Decomposition | Decomposes PRDs |
+
+### Specialist Agents (7)
+| Agent | Purpose | Model |
+|-------|---------|-------|
+| skill-builder | Creates/modifies skills | sonnet |
+| requirements-extractor | Extracts requirements | sonnet |
+| technical-researcher | Codebase + tech research | sonnet |
+| architecture-designer | Architecture design | opus |
+| task-decomposer | Task breakdown | sonnet |
+| risk-assessor | Risk identification | sonnet |
+| system-architect | Creates agents/teams/skills | opus |
+
+## Agent Skills
+
+| Skill | Location | Used By |
+|-------|----------|---------|
+| coding-conventions | `.claude/skills/coding-conventions/` | all agents |
+| team-coordination | `.claude/skills/team-coordination/` | all coordinators |
+| security-standards | `.claude/skills/security-standards/` | reviewer, risk-assessor |
+| research-patterns | `.claude/skills/research-patterns/` | researcher, technical-researcher |
+
+## Protected Paths (NEVER MODIFY)
+- {PROTECTED_PATHS}
+
+## Retry Limits
+
+| Operation | Max Retries | On Failure |
+|-----------|-------------|------------|
+| Build + Test | 3 | Escalate to orchestrator |
+| Review + Fix | 5 | Escalate to orchestrator |
+| Research | 2 | Report partial findings |
+```
+
+### File 8 (full-only): `.claude/rules/skill-system.md`
+
+```markdown
+---
+description: How to create and use skills.
+globs:
+  - ".claude/skills/**"
+---
+
+# Skill System
+
+Skills implement progressive disclosure for agent instructions.
+
+## Skill Directory Structure
+
+```
+.claude/skills/skill-name/
+  SKILL.md                 # YAML frontmatter + instructions
+  scripts/                 # Optional helper scripts
+  references/              # Optional documentation
+```
+
+## SKILL.md Format
+
+```markdown
+---
+name: skill-name
+description: Brief description for agent discovery
+version: 1.0.0
+author: Your Name
+---
+
+# Skill Name
+Instructions...
+```
+
+## Existing Skills
+
+Check `.claude/skills/` for current skills in this project.
+```
+
+### File 9 (full-only): `.claude/rules/configuration.md`
+
+```markdown
+---
+description: Configuration and environment variable patterns.
+globs:
+  - "{SRC_DIR}settings.*"
+  - "{SRC_DIR}config.*"
+  - ".env*"
+---
+
+# Configuration Patterns
+
+## Environment Variables
+- ALL configuration in `.env` file
+- Use validated settings/config objects
+- `.env.example` documents required variables with placeholder values
+
+## Configuration Hierarchy
+1. Environment variables (highest priority)
+2. `.env` file
+3. Default values in settings class
+
+## Protected Configuration Files
+- `.env` -- never commit, contains secrets
+- `.env.example` -- commit, contains placeholders only
+```
+
+---
+
+## 3c. PHASE 1c: PERSONAL PREFERENCES
+
+### File: `CLAUDE.local.md`
+
+Personal preferences file, gitignored by default.
+
+```markdown
+# CLAUDE.local.md - Personal Preferences
+
+This file is for YOUR personal preferences and is git-ignored.
+
+## My Preferences
+
+<!-- Uncomment and customize:
+- Prefer concise responses
+- Run tests automatically after edits
+- Prefer feature branches over direct commits
+-->
+```
+
+### Update `.gitignore`
+
+```bash
+echo "" >> .gitignore
+echo "# Claude Code local preferences" >> .gitignore
+echo "CLAUDE.local.md" >> .gitignore
 ```
 
 ---
@@ -3765,6 +4185,13 @@ that enables routing and coordination.
 
 This is an existing codebase. Agents build AROUND existing code. Never modify existing patterns without explicit instruction.
 
+## Rules Architecture
+
+Project rules are modular and path-scoped in `.claude/rules/`:
+- Rules load contextually based on which files you're editing
+- Each rule has YAML frontmatter with `globs:` for scoping
+- `@imports` in CLAUDE.md reference rules instead of duplicating content
+
 ## Task Routing
 
 | Request Pattern | Route To | Type |
@@ -3829,19 +4256,19 @@ All coordinators share: disallowedTools [Edit, MultiEdit, Write], hooks [Subagen
 
 ## Mandatory Practices
 
-1. **Grep Local Codebase FIRST (NON-NEGOTIABLE)**: Before writing ANY code, grep THIS project
-2. **Grep MCP (NON-NEGOTIABLE)**: Use `grep_query` to search GitHub for battle-tested code
-3. **LSP After Every Edit (NON-NEGOTIABLE)**: `getDiagnostics` after EVERY edit
-4. **Plan Before Execute (NON-NEGOTIABLE)**: Written plan before non-trivial changes
-5. **Learn From Mistakes (NON-NEGOTIABLE)**: Read `LEARNINGS.md` at start, write at end
-6. **Task Management (NON-NEGOTIABLE)**: TaskUpdate in_progress/completed for all work
-7. **Read before write**: Always read existing files before modifying
-8. **Match patterns**: Follow existing codebase conventions exactly
-9. **Type everything**: Full type annotations, no exceptions
-10. **Docstrings**: On all public functions
-11. **Structured logging**: `"action_name: key={value}"` format
-12. **Test after change**: Run `{TEST_RUNNER_COMMAND}` after any code change
-13. **Lint after change**: Run `{LINTER_COMMAND}` after any code change
+@.claude/rules/mandatory-practices.md
+
+## Project Structure
+
+```
+{SRC_DIR}                     # Source code
+{TESTS_DIR}                    # Test suite
+.claude/agents/            # 19 agent definitions
+.claude/skills/            # 4 agent skills (progressive disclosure)
+.claude/rules/             # 9 path-scoped rules (modular)
+team-registry/             # Team definitions and run logs
+reports/                   # Agent output reports
+```
 
 ## Protected Paths
 
@@ -3916,6 +4343,23 @@ After completing all phases, verify:
 - [ ] `.claude/settings.json` exists with `grep-mcp` server and `customInstructions`
 - [ ] `~/.claude/settings.json` has `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` env var set to `"1"`
 
+### Rules (Phase 1b)
+- [ ] `.claude/rules/` directory contains exactly 9 `.md` files
+- [ ] `mandatory-practices.md` has `globs: ["**"]`
+- [ ] `coding-principles.md` has `globs:` with `{SRC_DIR}` and `{TESTS_DIR}`
+- [ ] `common-pitfalls.md` has `globs:` with `{SRC_DIR}**/*.{LANG_EXT}`
+- [ ] `testing-patterns.md` has `globs:` with `{TESTS_DIR}**`
+- [ ] `documentation-style.md` has `globs:` with `**/*.{LANG_EXT}` and `**/*.md`
+- [ ] `security.md` has `globs:` with `{SRC_DIR}**/*.{LANG_EXT}`
+- [ ] `agent-system.md` has `globs:` with `.claude/agents/**` and `team-registry/**`
+- [ ] `skill-system.md` has `globs:` with `.claude/skills/**`
+- [ ] `configuration.md` has `globs:` with config file patterns
+- [ ] All `{PLACEHOLDER}` values have been replaced
+
+### Personal Preferences
+- [ ] `CLAUDE.local.md` exists
+- [ ] `CLAUDE.local.md` is listed in `.gitignore`
+
 ### Skills (Phase 2)
 - [ ] `.claude/skills/coding-conventions/SKILL.md` exists
 - [ ] `.claude/skills/team-coordination/SKILL.md` exists
@@ -3979,6 +4423,9 @@ After completing all phases, verify:
 - [ ] Protected paths listed
 - [ ] Detected commands with correct placeholders replaced
 - [ ] Retry limits table
+- [ ] Rules Architecture section present
+- [ ] `@.claude/rules/mandatory-practices.md` import present
+- [ ] Project Structure section includes `.claude/rules/`
 
 ### Support Files (Phase 8)
 - [ ] `learnings.md` exists with section headers
@@ -4039,6 +4486,8 @@ These rules govern ALL agent/team/skill creation and modification:
 
 Replace all `{LANGUAGE}`, `{FORMATTER}`, `{LINTER}`, `{TYPE_CHECKER}`, `{TEST_RUNNER}` placeholders. The core protocol (team-coordination, CROSS-DOMAIN/BLOCKER, model selection, retry limits) is language-agnostic. Only coding-conventions and security-standards need language-specific content.
 
+Additionally, update `{LANG_EXT}` in rules files (used in `globs:` for path scoping).
+
 #### Scaling Down
 
 For smaller projects, you can start with a subset:
@@ -4054,6 +4503,7 @@ When scaling down, keep:
 - team-coordination skill (if any coordinators)
 - Stop hooks on all agents (always)
 - LEARNINGS.md protocol (always)
+- rules files: keep all 6 base rules, remove 3 full-only rules (agent-system, skill-system, configuration)
 
 #### Scaling Up
 
