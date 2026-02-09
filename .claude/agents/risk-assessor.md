@@ -29,7 +29,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[risk-assessor] '$(date +%Y-%m-%d' '%H:%M)': Risk assessment complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[risk-assessor] '$(date +%Y-%m-%d' '%H:%M)': Risk assessment complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You identify risks in proposed changes and recommend mitigations.

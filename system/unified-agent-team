@@ -1,0 +1,398 @@
+# Unified Blueprint: Persistent Agent Teams (Condensed)
+
+**Persistent agents + team coordination + every production feature. No fluff.**
+
+---
+
+## 1. Architecture
+
+Four layers:
+
+1. **CLAUDE.md** -- Project map, routing tables, <150 instructions
+2. **Agents** (`.claude/agents/`) -- Specialists + Team Coordinators
+3. **Skills** (`.claude/skills/`) -- Slash commands (fork) + reference (auto-load via `skills:`)
+4. **Team Registry** (`team-registry/`) -- Team definitions + run logs
+
+Flow: User -> CLAUDE.md routing -> Coordinator reads team def -> spawns members via Task -> members communicate via files -> coordinator synthesizes -> knowledge base updated.
+
+Constraint: Subagents can't spawn subagents. Always hub-and-spoke at runtime. Communication protocol simulates peer-to-peer through files.
+
+---
+
+## 2. Agent Design
+
+Map workflow steps to agents. Distinct tools or cognitive mode = separate agent. Opus for judgment, sonnet for execution.
+
+**Minimum Tools Principle** -- missing tool > instruction. Enforce via `disallowedTools`.
+
+| Role | Tools | Denied |
+|---|---|---|
+| Research | Read, WebSearch, WebFetch, Grep | Edit, MultiEdit |
+| Build | Read, Write, Edit, MultiEdit, Bash, LSP, Grep | Task |
+| Review | Builder tools + fix capability | -- |
+| Test | Read, Bash, LSP, Glob, Grep, TaskUpdate | Edit, MultiEdit |
+| Orchestrator | Task, TaskCreate/Update, AskUserQuestion | Edit |
+| Coordinator | Task, TaskCreate/Update/List/Get, Read, Glob, Grep, LS, Bash | Edit, MultiEdit, Write |
+
+**Frontmatter:**
+
+    ---
+    name: agent-name
+    description: "Use PROACTIVELY when..."
+    tools: [list]
+    disallowedTools: [list]
+    model: opus | sonnet
+    permissionMode: default | acceptEdits
+    memory: project | user | none
+    maxTurns: N    # simple:25-35, medium:40-55, complex:60-80, orchestrator:100-120
+    skills: coding-conventions
+    hooks: ...
+    ---
+
+AskUserQuestion: main thread only, fails silently in subagents.
+
+---
+
+## 3. Team Coordinators
+
+Persistent equivalent of Agent Teams "lead." Lives on disk, has hooks/skills, survives sessions.
+
+**Does:** Read team def, check TaskList for prior work, decompose into tasks, spawn members via Task, monitor, route messages, synthesize, write run log, update LEARNINGS.md.
+
+**Does NOT:** Edit code, do the work, ask user questions, spawn sub-coordinators.
+
+**Startup sequence (mandatory):**
+1. Read learnings.md
+2. TaskList for in-progress work
+3. Read team-registry/{team}.md
+4. Read work scope
+
+**If resuming:** Don't restart. Find last completed task. Re-spawn only incomplete members with context.
+
+**End of session:** Write summary to learnings.md (completed, in-progress, next steps).
+
+One coordinator per pattern: review-team, feature-team, debug-team, research-team, execution-team.
+
+---
+
+## 4. Team Registry
+
+    team-registry/
+      README.md
+      parallel-review-team.md
+      cross-layer-feature-team.md
+      competing-hypotheses-team.md
+      research-swarm-team.md
+      plan-then-execute-team.md
+      run-logs/
+
+Each definition includes: purpose, when to use, members (agent file + model + role + output location), execution pattern, file ownership, communication protocol, done conditions, "What Worked"/"What Didn't Work" (updated after each run).
+
+---
+
+## 5. Communication Layer (Three Layers)
+
+All three active simultaneously. Each catches what others miss.
+
+### Layer 1: Structured Output Files (Always)
+
+Every member writes to designated output file:
+
+    # {Role} Report
+    Status: COMPLETE | IN-PROGRESS | BLOCKED | FAILED
+    ## Findings
+    ### {Title}
+    - File: path/to/file:line
+    - Severity: CRITICAL|HIGH|MEDIUM|LOW
+    - CROSS-DOMAIN:{TARGET}: {message}
+    - BLOCKER:{TARGET}: {what you need}
+    ## Knowledge Base Additions
+
+Coordinator greps ALL outputs for CROSS-DOMAIN and BLOCKER tags before synthesis.
+
+### Layer 2: Shared Message Log (Interdependent Teams)
+
+    .claude/team-comms/{run-id}/
+      messages.md       # Append-only. Format: ### [{time}] sender -> recipient | TYPE
+      status.md         # Member status table: STARTING|WORKING|BLOCKED|DONE|FAILED
+      interfaces.md     # Coordinator-managed. Single source of truth for cross-layer contracts.
+
+Message types: INFO, INTERFACE-CHANGE, BLOCKER, QUESTION, RESOLVED.
+interfaces.md: only coordinator writes. Members propose via messages.md.
+
+### Layer 3: Coordinator Routing (Always)
+
+Coordinator actively routes between members:
+- CROSS-DOMAIN tag found -> create follow-up task for target with actual finding
+- BLOCKER found -> check blocker status, re-spawn when resolved
+- INTERFACE-CHANGE -> update interfaces.md, task affected members
+- FAILED -> retry or escalate
+- BLOCKED >1 cycle -> investigate
+
+Rules: include actual findings (not "check the report"), extract relevant section, update interfaces.md BEFORE re-spawning dependents, create new tasks for follow-ups.
+
+**Which layers per pattern:**
+
+| Pattern | Outputs | Messages | Routing |
+|---|---|---|---|
+| Review | Primary | Optional | CROSS-DOMAIN synthesis |
+| Feature | Yes | All three files | Interface changes, blockers |
+| Debug | Primary | Optional | Converging diagnosis |
+| Research | Primary | No | Synthesis only |
+| Plan-Execute | Yes | If tracks interact | Cross-track deps |
+
+---
+
+## 6. Team Patterns
+
+### Parallel Review (3+coordinator)
+security-reviewer (opus), performance-reviewer (sonnet), test-coverage-reviewer (sonnet). Read-only on source. Each writes exclusive report. Variant: give reviewers Edit for fix-verify loop.
+
+### Cross-Layer Feature (3-4+coordinator)
+backend-builder, frontend-builder, test-builder. Strict file ownership. Full comm protocol with interfaces.md. Shared files coordinator-managed.
+
+### Competing Hypotheses (2-3+coordinator)
+Single `hypothesis-investigator.md` reused per hypothesis via different task descriptions. Output: hypothesis, verdict (SUPPORTED/REFUTED/INCONCLUSIVE), evidence for/against with file:line.
+
+### Research Swarm (3-5+coordinator)
+api-researcher (WebFetch/WebSearch), github-researcher (Grep MCP), ops-researcher, community-researcher. All denied Edit.
+
+### Plan-Then-Execute
+Phase 1: Plan Mode (cheap, single session) -> plan.md. Phase 2: execution-team-coordinator reads plan, spawns agents per track.
+
+---
+
+## 7. Routing & Triggering
+
+Three-layer strategy:
+1. **CLAUDE.md routing table** -- explicit rules, highest priority
+2. **Agent descriptions** -- trigger phrases, semantic matching
+3. **Orchestrator catch-all** -- catches everything else
+
+Descriptions need: action verbs, synonyms, "Use PROACTIVELY when...", negative signals.
+
+`disable-model-invocation`: OFF on orchestrator/coordinator. TRUE on pipeline skills. OFF on reference skills.
+
+---
+
+## 8. LSP (Non-Negotiable)
+
+| Operation | When |
+|---|---|
+| getDiagnostics | After EVERY edit |
+| goToDefinition | Before modifying function |
+| findReferences | Before rename/refactor |
+| hover | Unsure about types |
+| goToImplementation | Working with interfaces |
+
+Required for: all builders, test builder, all reviewers, investigators. Not required for: researchers, coordinators.
+
+In instructions: "MANDATORY: LSP getDiagnostics after EVERY edit. findReferences before renaming. goToDefinition before modifying."
+
+---
+
+## 9. Grep MCP (Absolute Must)
+
+Search GitHub before writing any substantial code. Required for: all builders, all reviewers, github-researcher.
+
+    grep MCP: "{service} client" language:{lang}
+    grep MCP: "{pattern} {framework}" language:{lang}
+
+Log successful search patterns in knowledge base.
+
+---
+
+## 10. Task Management
+
+Backbone of the system. Every work unit is a task with status, dependencies, ownership.
+
+    Epic -> Feature -> Task -> Subtask
+
+TaskCreate with addBlockedBy for dependencies. Coordinator creates epics/features, agents create tasks/subtasks. Tasks persist across sessions.
+
+---
+
+## 11. PRD Decomposition
+
+    PRD -> Sections -> Slices -> Tasks -> Subtasks
+
+Each task fits one context window. Good: "Build JWT middleware with refresh tokens." Bad: "Build entire backend."
+
+---
+
+## 12. Hooks
+
+Deterministic. Agents forget instructions. Hooks don't.
+
+| Hook | Purpose | On Which Agents |
+|---|---|---|
+| PostToolUse (Write/Edit/MultiEdit) | Auto-format | All code-editing |
+| PreToolUse (Edit) | Audit log | Reviewers |
+| Stop | Knowledge base append | ALL agents |
+| SubagentStart/Stop | Pipeline log | Coordinators, orchestrator |
+
+Variables: $PROJECT_DIR, $TOOL_INPUT_PATH. Scope: global (settings.json), agent (frontmatter), skill.
+
+---
+
+## 13. Coding Standards
+
+In reference skill `.claude/skills/coding-conventions/SKILL.md`, not CLAUDE.md. Every agent loads via `skills:`.
+
+Cover: formatting, naming, imports, error handling, types, architecture, resilience, output contracts.
+
+Six enforcement layers: hooks, LSP, linting, type checking, review agent, reference skill.
+
+---
+
+## 14. Refactoring
+
+Before: findReferences, goToDefinition, goToImplementation, Grep MCP, run tests.
+During: one change, getDiagnostics, tests after each change.
+Cross-ownership: goes through coordinator as INTERFACE-CHANGE.
+
+---
+
+## 15. Parallel Safety
+
+**Golden rule: no two parallel agents write same file.**
+
+Enforce via: tool restrictions (frontmatter), task descriptions (boundaries), team definition (documented), shared file protocol (append-only or coordinator-managed).
+
+Verify before parallel: non-overlapping writes, no reads during writes, separate outputs, append-only shared resources.
+
+---
+
+## 16. Context Loading
+
+Task-aware, not static. Three tiers per agent:
+- ALWAYS: learnings.md, conventions skill
+- LOAD: files relevant to current task
+- NEVER: other stages, superseded versions, consumed intermediates
+
+Coordinator passes focused summaries, not raw dumps.
+
+---
+
+## 17. Pipeline Design
+
+DAG pattern. Parallel where possible, sequential where necessary. TaskCreate with addBlockedBy. Retry limits: build-test 3, review-fix 5.
+
+---
+
+## 18. Knowledge Management
+
+    ## Mistakes (do NOT repeat)
+    ## Patterns That Work
+    ## Gotchas
+    ## Architecture Decisions
+    ## Search Patterns
+    ## Team Run Notes
+
+Read before work. Write after. Research before code (mandatory). State in files, not conversation (compaction-safe).
+
+---
+
+## 19. Testing
+
+Tester denied Edit/MultiEdit. Reports failures with file:line + suggested fix. Coordinator routes to builder (max 3 retries). Test: happy path, errors, edges, resilience, config. Dry-run for externals.
+
+---
+
+## 20. Environment & Git
+
+Dependency isolation per language. Git: never force push, never push main, feature branches, descriptive commits, tests before commit.
+
+---
+
+## 21. CI/CD
+
+Agents build/test/review locally. CI runs clean on push/PR. Agents run local checks before pushing. Document deployment, restrict deployer, CI must pass, include rollback.
+
+---
+
+## 22. Session Management
+
+Everything persists on disk: agents, team defs, tasks, knowledge base, logs, comms, outputs, skills, hooks.
+
+Coordinator start: read learnings, TaskList, pipeline log, status.md.
+Resume: last completed task, don't restart.
+End: summary to learnings.md.
+
+/compact: preserve modified files, pipeline status, active tasks. Re-read key files after.
+Plan Mode (Shift+Tab twice): before complex builds.
+
+---
+
+## 23. Cost
+
+Opus: orchestrator, coordinators, security reviewer. Sonnet: everything else. 2-5 members (linear cost scaling). Plan first (cheap), team second (expensive). Clear done conditions. maxTurns calibrated.
+
+---
+
+## 24. Security
+
+Never hardcode secrets. Env vars for credentials. .gitignore covers .env/keys/pems. Builders prohibited from hardcoding. Reviewers check for leaks. Coordinator verifies at run start. Dry-run without credentials.
+
+---
+
+## 25. Idempotency
+
+Check state before creating files/tasks. Resume from first incomplete step. Overwrite over append for generated files. Re-running doesn't break completed work.
+
+---
+
+## 26. Debugging
+
+Check: loaded files, tools, instructions, maxTurns, knowledge base, context bloat. Fix root cause, re-run, add to learnings.
+
+---
+
+## 27. Compound Loop
+
+    PLAN (cheap) -> EXECUTE (team) -> REVIEW (team) -> COMPOUND (cheap) -> REPEAT
+
+Compound step: update learnings, team definition, agent frontmatter, skills, CLAUDE.md, write run log. Each cycle faster and higher quality.
+
+---
+
+## 28. Design Decisions
+
+1. Reviewer fixes, not reports
+2. Coordinator never does the work
+3. Hooks over instructions
+4. Research before code
+5. Specialist boundaries via tools
+6. Decompose before building
+7. Tasks as source of truth
+8. Trigger-rich descriptions + routing table
+9. File ownership non-negotiable
+10. Three-layer communication
+11. Teams persistent and evolving
+
+---
+
+## 29. File Structure
+
+    project-root/
+      CLAUDE.md
+      learnings.md
+      .claude/
+        agents/          # orchestrator, coordinators, builders, reviewers, researchers, etc.
+        skills/          # coding-conventions, security-standards, team-coordination, research-patterns
+        team-comms/      # {run-id}/messages.md, status.md, interfaces.md
+      team-registry/     # team definitions + run-logs/
+      reports/           # .pipeline-log, .fix-log, review outputs, synthesis
+
+---
+
+## 30. Quick Start
+
+1. Pick one pattern (usually Parallel Review)
+2. Create 4 agents in .claude/agents/
+3. Create team definition in team-registry/
+4. Create team-coordination skill
+5. Add team routing to CLAUDE.md
+6. Create directories: run-logs/, team-comms/, reports/
+7. Run it
+8. Compound: update everything based on results

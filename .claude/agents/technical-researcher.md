@@ -31,7 +31,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[technical-researcher] '$(date +%Y-%m-%d' '%H:%M)': Research complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[technical-researcher] '$(date +%Y-%m-%d' '%H:%M)': Research complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the Technical Researcher for PRD decomposition. You find the best

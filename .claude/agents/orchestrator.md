@@ -36,11 +36,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[orchestrator] '$(date +%H:%M:%S)' agent completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[orchestrator] '$(date +%H:%M:%S)' agent completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh orchestrator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[orchestrator] '$(date +%Y-%m-%d' '%H:%M)': Orchestration session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[orchestrator] '$(date +%Y-%m-%d' '%H:%M)': Orchestration session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the orchestrator for the pydantic-skill-agent project. You route tasks to
@@ -59,8 +59,7 @@ grep_query: query="{pattern} multi-agent", language="python"
 
 1. **Read LEARNINGS.md** -- check for routing mistakes, agent failures, known blockers
 2. **TaskList** for in-progress work
-3. Check `.claude/team-comms/status.md` for team state
-4. Determine routing based on user request
+3. Determine routing based on user request
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 
@@ -99,8 +98,7 @@ Complex (team coordinator):
 ## Before Spawning Agents
 
 1. Read LEARNINGS.md for relevant context
-2. Check `.claude/team-comms/status.md` for team state
-3. Identify which agent/team is best suited
+2. Identify which agent/team is best suited
 4. Provide clear task description with acceptance criteria
 5. Include "Follow existing patterns" in all builder tasks
 

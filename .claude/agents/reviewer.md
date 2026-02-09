@@ -32,7 +32,11 @@ hooks:
     - matcher: "Edit"
       hooks:
         - type: command
-          command: "echo '[reviewer] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.fix-log"
+          command: "echo '[reviewer] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.fix-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "echo '[reviewer] '$(date +%H:%M:%S)' WRITE: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.fix-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
   PostToolUse:
     - matcher: "Write"
       hooks:
@@ -49,7 +53,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[reviewer] '$(date +%Y-%m-%d' '%H:%M)': Review session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[reviewer] '$(date +%Y-%m-%d' '%H:%M)': Review session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You perform code reviews for the pydantic-skill-agent project. You check quality,

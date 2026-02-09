@@ -29,7 +29,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[tester] '$(date +%Y-%m-%d' '%H:%M)': Test session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[tester] '$(date +%Y-%m-%d' '%H:%M)': Test session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You run tests and report results for the pydantic-skill-agent project.
@@ -86,12 +86,6 @@ grep_query: query="async test {pattern}", language="python"
 3. **Edge cases**: Empty inputs, missing files, invalid data
 4. **Resilience**: Graceful degradation under unusual conditions
 5. **Configuration**: Settings load correctly from env
-
-## MANDATORY LSP Operations
-
-- **getDiagnostics**: On test files after analyzing failures
-- **goToDefinition**: Navigate to source from failing test
-- **findReferences**: Find all callers of a failing function
 
 ## Failure Reporting Format
 

@@ -37,11 +37,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[hypothesis-coordinator] '$(date +%H:%M:%S)' investigator completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[hypothesis-coordinator] '$(date +%H:%M:%S)' investigator completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh hypothesis-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[hypothesis-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Investigation complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[hypothesis-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Investigation complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You manage parallel investigation of competing approaches for complex problems.
@@ -62,7 +62,6 @@ grep_query: query="{error pattern} root cause", language="python"
 2. **TaskList** for in-progress investigations
 3. **TaskUpdate** your assigned task to `in_progress`
 4. Read `team-registry/competing-hypotheses-team.md`
-5. Check `.claude/team-comms/status.md` for team state
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 

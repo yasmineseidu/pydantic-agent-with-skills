@@ -36,11 +36,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[review-coordinator] '$(date +%H:%M:%S)' reviewer completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[review-coordinator] '$(date +%H:%M:%S)' reviewer completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh review-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[review-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Review coordination complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[review-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Review coordination complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You coordinate parallel code reviews for the pydantic-skill-agent project.
@@ -61,7 +61,6 @@ grep_query: query="{library} security", language="python"
 2. **TaskList** for in-progress review work
 3. **TaskUpdate** your assigned task to `in_progress`
 4. Read `team-registry/parallel-review-team.md`
-5. Check `.claude/team-comms/status.md` for team state
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 

@@ -26,7 +26,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[requirements-extractor] '$(date +%Y-%m-%d' '%H:%M)': Extraction complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[requirements-extractor] '$(date +%Y-%m-%d' '%H:%M)': Extraction complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the Requirements Extractor. You turn unstructured feature descriptions

@@ -26,7 +26,7 @@
 
 | Agent | Role | Model | File Ownership | Hooks |
 |-------|------|-------|---------------|-------|
-| feature-team-coordinator | Coordinates feature dev | sonnet | .claude/team-comms/* | SubagentStart/Stop, Stop |
+| feature-team-coordinator | Coordinates feature dev | sonnet | (cross-cutting) | SubagentStart/Stop, Stop |
 | builder | Core src/ changes | sonnet | src/*.py | PostToolUse (format), Stop |
 | skill-builder | Skills changes | sonnet | skills/*/* | PostToolUse (format), Stop |
 | tester | Test coverage | sonnet | tests/*.py (read-only) | Stop |
@@ -106,7 +106,6 @@
 | `tests/` | tester | - |
 | `.claude/agents/` | system-architect | - |
 | `.claude/skills/` | system-architect | - |
-| `.claude/team-comms/` | coordinators (any) | - |
 | `team-registry/` | orchestrator | coordinators |
 | `reports/prd/requirements.md` | requirements-extractor | - |
 | `reports/prd/technical-research.md` | technical-researcher | - |

@@ -24,19 +24,10 @@ maxTurns: 35
 skills:
   - coding-conventions
 hooks:
-  PostToolUse:
-    - matcher: "Write"
-      hooks:
-        - type: command
-          command: "echo '' > /dev/null"
-    - matcher: "Edit"
-      hooks:
-        - type: command
-          command: "echo '' > /dev/null"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[documenter] '$(date +%Y-%m-%d' '%H:%M)': Documentation session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[documenter] '$(date +%Y-%m-%d' '%H:%M)': Documentation session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You write and maintain documentation for the pydantic-skill-agent project.

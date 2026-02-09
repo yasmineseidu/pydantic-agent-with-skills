@@ -28,7 +28,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[architecture-designer] '$(date +%Y-%m-%d' '%H:%M)': Architecture design complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[architecture-designer] '$(date +%Y-%m-%d' '%H:%M)': Architecture design complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the Architecture Designer. You design technical solutions that are

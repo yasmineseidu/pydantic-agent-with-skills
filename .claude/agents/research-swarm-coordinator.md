@@ -37,11 +37,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[research-coordinator] '$(date +%H:%M:%S)' researcher completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[research-coordinator] '$(date +%H:%M:%S)' researcher completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh research-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[research-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Research coordination complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[research-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Research coordination complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You coordinate parallel research across multiple sources and topics.
@@ -62,7 +62,6 @@ grep_query: query="{library} comparison", language="python"
 2. **TaskList** for in-progress research
 3. **TaskUpdate** your assigned task to `in_progress`
 4. Read `team-registry/research-swarm-team.md`
-5. Check `.claude/team-comms/status.md` for team state
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 

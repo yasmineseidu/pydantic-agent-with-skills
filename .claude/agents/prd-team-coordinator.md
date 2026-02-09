@@ -19,7 +19,7 @@ tools:
   - Grep
   - LS
   - Bash
-  - Write
+  - Write  # Exception: needed for reports/prd/ synthesis. Coordinator does NOT write code.
 disallowedTools:
   - Edit
   - MultiEdit
@@ -36,11 +36,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[prd-coordinator] '$(date +%H:%M:%S)' completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[prd-coordinator] '$(date +%H:%M:%S)' completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh prd-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[prd-coordinator] '$(date +%Y-%m-%d' '%H:%M)': PRD decomposition complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[prd-coordinator] '$(date +%Y-%m-%d' '%H:%M)': PRD decomposition complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the PRD Decomposition Coordinator. You turn feature ideas into

@@ -29,6 +29,15 @@ maxTurns: 35
 skills:
   - coding-conventions
 hooks:
+  PreToolUse:
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "echo '[skill-builder] '$(date +%H:%M:%S)' WRITE: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
+    - matcher: "Edit"
+      hooks:
+        - type: command
+          command: "echo '[skill-builder] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
   PostToolUse:
     - matcher: "Write"
       hooks:
@@ -45,7 +54,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[skill-builder] '$(date +%Y-%m-%d' '%H:%M)': Skill build session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[skill-builder] '$(date +%Y-%m-%d' '%H:%M)': Skill build session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You create and modify skills in the `skills/` directory for the pydantic-skill-agent project.

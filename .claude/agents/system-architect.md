@@ -37,19 +37,19 @@ skills:
   - coding-conventions
   - team-coordination
 hooks:
-  PostToolUse:
+  PreToolUse:
     - matcher: "Write"
       hooks:
         - type: command
-          command: "echo '' > /dev/null"
+          command: "echo '[system-architect] '$(date +%H:%M:%S)' WRITE: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log"
     - matcher: "Edit"
       hooks:
         - type: command
-          command: "echo '' > /dev/null"
+          command: "echo '[system-architect] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[system-architect] '$(date +%Y-%m-%d' '%H:%M)': System modification complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[system-architect] '$(date +%Y-%m-%d' '%H:%M)': System modification complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the System Architect. You design and build the agent infrastructure itself --
@@ -351,7 +351,7 @@ For EVERY coordinator you create, include:
 - Startup sequence: read learnings.md, TaskList, team definition, scope
 - Resume protocol: don't restart, last completed task, re-spawn incomplete
 - Execution: create Epic task, Feature per member with addBlockedBy, spawn parallel where possible
-- Communication routing: CROSS-DOMAIN -> follow-up task, BLOCKER -> check and re-spawn, INTERFACE-CHANGE -> update interfaces.md first
+- Communication routing: CROSS-DOMAIN -> follow-up task, BLOCKER -> check and re-spawn, INTERFACE-CHANGE -> document in task descriptions first
 - Parallel safety: no two members write same file, append-only for shared, coordinator-managed for interfaces
 - Done conditions: all tasks complete, outputs exist, CROSS-DOMAIN addressed, synthesis written, run log written
 - Session end: summary to learnings.md

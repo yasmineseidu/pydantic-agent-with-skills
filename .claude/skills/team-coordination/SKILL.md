@@ -72,7 +72,7 @@ If blocked >1 cycle, investigate and escalate.
 
 ### Message Types (for shared message log)
 - **INFO**: General status update
-- **INTERFACE-CHANGE**: Contract changed (coordinator must update interfaces.md)
+- **INTERFACE-CHANGE**: Contract changed (coordinator documents in task descriptions)
 - **BLOCKER**: Agent is blocked (coordinator investigates)
 - **QUESTION**: Agent needs clarification
 - **RESOLVED**: Previously blocked issue resolved
@@ -80,7 +80,7 @@ If blocked >1 cycle, investigate and escalate.
 ### Coordinator Routing Rules
 1. CROSS-DOMAIN tag found -> create follow-up task for target with actual finding
 2. BLOCKER found -> check blocker status, re-spawn when resolved
-3. INTERFACE-CHANGE -> update interfaces.md BEFORE re-spawning dependents
+3. INTERFACE-CHANGE -> document in task descriptions BEFORE re-spawning dependents
 4. FAILED -> retry or escalate
 5. BLOCKED >1 cycle -> investigate root cause
 6. Always include actual findings in routed messages (not "check the report")
@@ -111,55 +111,6 @@ Coordinators pass focused summaries to agents, NOT raw file dumps:
 ```
 GOOD: "The architecture.md defines a REST API with 3 endpoints: GET /skills, POST /skills/{name}/load, GET /skills/{name}/files/{path}"
 BAD: "Read the full architecture.md file for context"
-```
-
-## Team Communication
-
-### Messages Protocol
-
-All inter-agent messages go through `.claude/team-comms/messages.md`:
-
-```markdown
-## Messages
-
-### [timestamp] [sender] → [recipient]
-**Type**: [request|response|alert|handoff]
-**Priority**: [critical|high|normal|low]
-
-[message content]
-
----
-```
-
-### Status Tracking
-
-Team status tracked in `.claude/team-comms/status.md`:
-
-```markdown
-## Team Status
-
-| Agent | Status | Current Task | Blocked By | Last Update |
-|-------|--------|-------------|------------|-------------|
-| orchestrator | active | routing task | - | now |
-| builder | working | implementing X | - | 2min ago |
-| reviewer | idle | waiting | builder | 5min ago |
-```
-
-### Interface Contracts
-
-Shared interfaces tracked in `.claude/team-comms/interfaces.md`:
-
-```markdown
-## Interfaces
-
-### [Module A] ↔ [Module B]
-**Owner**: [agent name]
-**Contract**:
-- Input: [type/shape]
-- Output: [type/shape]
-- Error: [error handling agreement]
-
-**Last verified**: [timestamp]
 ```
 
 ## File Ownership Rules
@@ -200,7 +151,6 @@ Each file has ONE owner agent. Only the owner may modify it.
 
 ### Coordinator-Managed Files
 These files may be touched by coordinators when resolving cross-agent conflicts:
-- `.claude/team-comms/*` - All coordinators
 - `team-registry/*` - All coordinators (team defs, run logs)
 - `team-registry/run-logs/*` - All coordinators (write after each run)
 - `src/__init__.py` - Any builder (minimal changes only)
@@ -238,7 +188,6 @@ Before marking ANY task as complete, verify:
 - [ ] README.md updated (if user-facing change)
 
 ### Handoff
-- [ ] Status updated in `.claude/team-comms/status.md`
 - [ ] Blocking agents notified via messages
 - [ ] Files touched listed in output
 
@@ -388,6 +337,75 @@ Before spawning, assess complexity:
 4. Pass model parameter: Task(model="haiku|sonnet|opus", ...)
 5. Log: "[coordinator] Spawning {agent} with {model} (score: {N})"
 ```
+
+## Context Window Budget (MANDATORY)
+
+Pre-loaded context per agent session is approximately 25-30K tokens:
+- CLAUDE.md (~12K tokens)
+- MEMORY.md (~3K tokens)
+- Agent instructions (~3-5K tokens)
+- Loaded skills (~4-8K tokens)
+
+### Budget Guidelines
+
+| Session Length | Context Strategy |
+|---------------|-----------------|
+| Short (< 10 turns) | Load everything: LEARNINGS.md, team definition, full codebase scan |
+| Medium (10-30 turns) | Load LEARNINGS.md (first 50 lines), skip team definition if familiar |
+| Long (> 30 turns) | Skip LEARNINGS.md reload, skip skill files, rely on cached knowledge |
+
+### LEARNINGS.md Reading Budget
+- Read first 50 lines maximum at startup
+- Grep for keywords related to current task instead of reading all
+- If LEARNINGS.md exceeds 100 lines, coordinator should prune it
+
+### Reducing Agent Instruction Redundancy
+- When an instruction exists in a loaded skill, reference the skill instead of repeating:
+  ```
+  GOOD: "Follow MANDATORY STARTUP from coding-conventions skill"
+  BAD:  (repeating the full 15-line startup protocol in agent instructions)
+  ```
+- Coordinators: pass focused summaries, not raw file dumps (see Context Loading Tiers)
+
+### Anti-Patterns (NEVER DO)
+- Load full LEARNINGS.md when it exceeds 100 lines
+- Read all team definitions when working on a single team
+- Include raw file content in agent task descriptions when a summary suffices
+- Skip LEARNINGS.md entirely ("I already know this project")
+
+## Cost Awareness
+
+Approximate token costs per agent session (2025 pricing, varies by session length):
+
+| Model | Cost per Session | Typical Use |
+|-------|-----------------|-------------|
+| haiku | $0.05 - $0.10 | Mechanical tasks, simple extraction |
+| sonnet | $0.50 - $2.00 | Standard development, research, reviews |
+| opus | $2.00 - $10.00 | Architecture, security, complex judgment |
+
+### Team Run Estimates
+
+| Team | Typical Cost | Agents Involved |
+|------|-------------|-----------------|
+| Parallel Review | $2 - $5 | sonnet coordinator + sonnet reviewer + sonnet tester |
+| Cross-Layer Feature | $5 - $15 | sonnet coordinator + 2-4 sonnet workers |
+| Research Swarm | $3 - $8 | sonnet coordinator + 2-4 sonnet researchers |
+| Competing Hypotheses | $3 - $10 | sonnet coordinator + 2-3 sonnet/opus investigators |
+| PRD Decomposition | $15 - $30 | opus coordinator + 4 sonnet/opus specialists |
+| Plan-Then-Execute | $5 - $20 | sonnet coordinator + variable execution agents |
+
+### Cost Optimization Rules
+1. **Default to sonnet** -- only upgrade to opus when complexity score >= 7 or ambiguity/risk >= 2
+2. **Use haiku for mechanical work** -- requirement extraction from structured specs, simple task decomposition
+3. **Log model selection** -- coordinators MUST log: `"[coordinator] Spawning {agent} with {model} (score: {N}, cost: ~${estimate})"`
+4. **Avoid unnecessary re-spawns** -- check if prior agent output is usable before re-running
+5. **Budget alerts** -- if a team run exceeds 5 agent spawns, pause and assess if more are needed
+
+### Anti-Patterns (NEVER DO)
+- Use opus for mechanical tasks (formatting, simple extraction, file listing)
+- Spawn 4 researchers when 2 would cover the topic
+- Re-spawn an agent because output "could be better" without specific gaps
+- Skip complexity scoring ("just use sonnet for everything")
 
 ## Escalation Protocol
 

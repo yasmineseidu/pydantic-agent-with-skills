@@ -31,6 +31,15 @@ maxTurns: 40
 skills:
   - coding-conventions
 hooks:
+  PreToolUse:
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "echo '[builder] '$(date +%H:%M:%S)' WRITE: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
+    - matcher: "Edit"
+      hooks:
+        - type: command
+          command: "echo '[builder] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/check-diagnostics.sh && $PROJECT_DIR/scripts/check-grep-mcp.sh"
   PostToolUse:
     - matcher: "Write"
       hooks:
@@ -47,7 +56,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[builder] '$(date +%Y-%m-%d' '%H:%M)': Build session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[builder] '$(date +%Y-%m-%d' '%H:%M)': Build session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You write code for the pydantic-skill-agent project. You follow existing patterns exactly.
@@ -218,7 +227,7 @@ async def my_tool(
 
 ## File Ownership
 
-You own all files in `src/` and `skills/*/SKILL.md`. Do not modify files owned by other agents (see team-coordination skill).
+You own all files in `src/`. For `skills/` changes, defer to skill-builder. Do not modify files owned by other agents (see team-coordination skill).
 
 ## Build Commands
 

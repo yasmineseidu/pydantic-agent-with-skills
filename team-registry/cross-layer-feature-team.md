@@ -60,13 +60,12 @@ Phase 5: Review (reviewer)          -> full review of all changes
 |-------|--------|-------|
 | Structured Outputs | Yes | Each agent writes designated output |
 | Shared Message Log | All three files | Full protocol for cross-module work |
-| Coordinator Routing | Interface changes, blockers | Updates interfaces.md BEFORE re-spawning |
+| Coordinator Routing | Interface changes, blockers | Documents in task descriptions |
 
 ### Interface Management
-- Coordinator writes `.claude/team-comms/interfaces.md`
 - Builder implements core interface first
 - Other agents implement against that interface
-- INTERFACE-CHANGE messages trigger interfaces.md update + dependent re-spawns
+- INTERFACE-CHANGE messages trigger task description updates + dependent re-spawns
 
 ## Done Conditions
 - [ ] All phases complete

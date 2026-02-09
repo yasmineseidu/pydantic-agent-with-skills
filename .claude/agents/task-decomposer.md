@@ -26,7 +26,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[task-decomposer] '$(date +%Y-%m-%d' '%H:%M)': Decomposition complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[task-decomposer] '$(date +%Y-%m-%d' '%H:%M)': Decomposition complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You are the Task Decomposer. You break architecture into atomic tasks

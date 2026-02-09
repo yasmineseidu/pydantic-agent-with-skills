@@ -36,11 +36,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[feature-coordinator] '$(date +%H:%M:%S)' builder completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[feature-coordinator] '$(date +%H:%M:%S)' builder completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh feature-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[feature-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Feature coordination complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[feature-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Feature coordination complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You coordinate cross-module feature development for the pydantic-skill-agent project.
@@ -62,7 +62,6 @@ grep_query: query="{pattern} pydantic ai", language="python"
 2. **TaskList** for in-progress feature work
 3. **TaskUpdate** your assigned task to `in_progress`
 4. Read `team-registry/cross-layer-feature-team.md`
-5. Check `.claude/team-comms/status.md` for team state
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 
@@ -91,7 +90,6 @@ grep_query: query="{pattern} pydantic ai", language="python"
 ## Coordinator-Managed (cross-cutting)
 - `src/__init__.py` - Minimal changes only
 - `pyproject.toml` - Dependency changes
-- `.claude/team-comms/*` - Team state
 
 ## Workflow
 
@@ -111,7 +109,7 @@ Phase 5: Review (reviewer)         -> full review
 
 ### 3. Manage Cross-Module Interfaces
 When feature spans modules:
-- Document interface in `.claude/team-comms/interfaces.md`
+- Document interface contracts in team task descriptions
 - Builder implements core interface first
 - Other agents implement against that interface
 - Coordinator resolves conflicts via INTERFACE-CHANGE protocol
@@ -120,7 +118,7 @@ When feature spans modules:
 - Grep ALL agent outputs for CROSS-DOMAIN and BLOCKER tags
 - CROSS-DOMAIN tag found -> create follow-up task for target with actual finding
 - BLOCKER found -> check blocker status, re-spawn when resolved
-- INTERFACE-CHANGE -> update interfaces.md BEFORE re-spawning dependents
+- INTERFACE-CHANGE -> update interface contracts in task descriptions BEFORE re-spawning dependents
 
 ### 5. Integration Verification
 After all agents complete:
@@ -138,7 +136,7 @@ After all agents complete:
 
 ## Escalation
 - Builder blocked -> Research alternative approach
-- Interface conflict -> Coordinator decides, documents in interfaces.md
+- Interface conflict -> Coordinator decides, documents in task description
 - Test failures after integration -> Triage: module issue or integration issue?
 
 ## Session End

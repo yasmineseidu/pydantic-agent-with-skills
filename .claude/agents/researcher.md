@@ -32,7 +32,7 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "echo '[researcher] '$(date +%Y-%m-%d' '%H:%M)': Research session complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[researcher] '$(date +%Y-%m-%d' '%H:%M)': Research session complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You research solutions, packages, and patterns for the pydantic-skill-agent project.

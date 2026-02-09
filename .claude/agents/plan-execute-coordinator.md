@@ -36,11 +36,11 @@ hooks:
   SubagentStop:
     - hooks:
         - type: command
-          command: "echo '[plan-execute-coordinator] '$(date +%H:%M:%S)' agent completed' >> $PROJECT_DIR/reports/.pipeline-log"
+          command: "echo '[plan-execute-coordinator] '$(date +%H:%M:%S)' agent completed' >> $PROJECT_DIR/reports/.pipeline-log && $PROJECT_DIR/scripts/validate-agent-output.sh plan-execute-coordinator"
   Stop:
     - hooks:
         - type: command
-          command: "echo '[plan-execute-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Plan-execute coordination complete' >> $PROJECT_DIR/learnings.md"
+          command: "echo '[plan-execute-coordinator] '$(date +%Y-%m-%d' '%H:%M)': Plan-execute coordination complete' >> $PROJECT_DIR/reports/.session-log"
 ---
 
 You plan implementation strategies then coordinate execution. Use for refactoring,
@@ -61,7 +61,6 @@ grep_query: query="{migration} step-by-step", language="python"
 2. **TaskList** for in-progress execution plans
 3. **TaskUpdate** your assigned task to `in_progress`
 4. Read `team-registry/plan-then-execute-team.md`
-5. Check `.claude/team-comms/status.md` for team state
 
 ## MANDATORY SHUTDOWN (do this LAST, every session)
 
@@ -135,7 +134,7 @@ Spawn multiple agents for independent steps.
 - Grep agent outputs for CROSS-DOMAIN and BLOCKER tags
 - CROSS-DOMAIN -> route to target agent
 - BLOCKER -> investigate and unblock
-- INTERFACE-CHANGE -> update interfaces.md, re-spawn dependents
+- INTERFACE-CHANGE -> document in task, re-spawn dependents
 
 ### Rollback Protocol
 If a step fails:
