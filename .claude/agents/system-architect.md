@@ -179,6 +179,159 @@ Create everything in this order:
 7. Update CLAUDE.md routing table
 8. Verify CLAUDE.md under 150 instructions
 
+#### Agent-Reference Skill Template (`.claude/skills/`)
+
+These are shared skills loaded by agents via `skills:` in YAML frontmatter.
+Different from user-facing skills in `skills/`. Location: `.claude/skills/{name}/SKILL.md`
+
+```markdown
+---
+name: {skill-name}
+description: {1-2 sentence description of what this skill enforces/provides. Be specific.}
+version: 1.0.0
+author: Agent Team System
+---
+
+# {Skill Title}
+
+{1-line summary of purpose. State who MUST follow it.}
+
+## {Topic Section 1}
+
+{Concrete rules with code examples. No vague guidance.}
+
+### {Subsection}
+- **Rule**: {exact rule}
+- **Example**: {code block or command}
+- **Anti-pattern**: {what NOT to do}
+
+## {Topic Section 2 (MANDATORY)}
+
+{Mark critical sections MANDATORY in the heading.}
+
+### When to {action}
+- {specific trigger 1}
+- {specific trigger 2}
+
+### How to {action}
+```
+{exact commands or patterns to follow}
+```
+
+### Anti-Patterns (NEVER DO)
+- {specific anti-pattern 1}
+- {specific anti-pattern 2}
+
+## Enforcement Layers
+
+{Numbered list of how this skill is enforced, from strictest to softest.}
+```
+
+**Existing agent-reference skills (read these for format reference):**
+- `.claude/skills/coding-conventions/SKILL.md` -- formatting, naming, imports, error handling, type annotations, LSP, grep-mcp, plan, learning, task tracking
+- `.claude/skills/team-coordination/SKILL.md` -- output format, messaging, file ownership, CROSS-DOMAIN/BLOCKER protocol, context loading tiers, task decomposition
+- `.claude/skills/security-standards/SKILL.md` -- secrets, input validation, path traversal, OWASP for Python
+- `.claude/skills/research-patterns/SKILL.md` -- search strategy, source evaluation, output format
+
+**Rules for agent-reference skills:**
+1. Content must be CONCRETE -- exact rules, exact commands, exact examples. No vague guidance.
+2. Mark critical sections with `(MANDATORY)` or `(NON-NEGOTIABLE)` in headings.
+3. Include anti-patterns for every major rule (what NOT to do).
+4. Keep sections scannable -- agents load these mid-task, not as bedtime reading.
+5. After creating, add `skills: [{name}]` to every agent that should load it.
+6. Update CLAUDE.md skills table with new skill + which agents load it.
+
+#### Agent File Template (`.claude/agents/`)
+
+Every agent MUST have this complete YAML frontmatter structure:
+
+```yaml
+---
+name: {agent-name}
+description: >
+  {What it does. 2-3 sentences.} Use PROACTIVELY when user asks to
+  "{trigger phrase 1}", "{trigger phrase 2}", "{trigger phrase 3}",
+  "{trigger phrase 4}", "{trigger phrase 5}".
+  {Constraints: "Does NOT edit code directly" or "Read-only" etc.}
+model: {opus|sonnet}
+tools:
+  - {tool1}
+  - {tool2}
+disallowedTools:
+  - {tool1}
+  - {tool2}
+permissionMode: {acceptEdits|default}
+memory: project
+maxTurns: {N}
+skills:
+  - coding-conventions
+  - {other-skills}
+hooks:
+  PostToolUse:           # For code-editing agents only
+    - matcher: "Write"
+      hooks:
+        - type: command
+          command: "ruff format \"$TOOL_INPUT_FILE_PATH\" 2>/dev/null || true"
+    - matcher: "Edit"
+      hooks:
+        - type: command
+          command: "ruff format \"$TOOL_INPUT_FILE_PATH\" 2>/dev/null || true"
+    - matcher: "MultiEdit"
+      hooks:
+        - type: command
+          command: "ruff format \"$TOOL_INPUT_FILE_PATH\" 2>/dev/null || true"
+  PreToolUse:            # For reviewer agents only
+    - matcher: "Edit"
+      hooks:
+        - type: command
+          command: "echo '[{name}] '$(date +%H:%M:%S)' EDIT: '\"$TOOL_INPUT_FILE_PATH\" >> $PROJECT_DIR/reports/.fix-log"
+  SubagentStart:         # For coordinators only
+    - hooks:
+        - type: command
+          command: "echo '[{name}] '$(date +%H:%M:%S)' spawned agent' >> $PROJECT_DIR/reports/.pipeline-log"
+  SubagentStop:          # For coordinators only
+    - hooks:
+        - type: command
+          command: "echo '[{name}] '$(date +%H:%M:%S)' agent completed' >> $PROJECT_DIR/reports/.pipeline-log"
+  Stop:                  # ALL agents - no exceptions
+    - hooks:
+        - type: command
+          command: "echo '[{name}] '$(date +%Y-%m-%d' '%H:%M)': {action} complete' >> $PROJECT_DIR/learnings.md"
+---
+
+{Role description. 1-2 sentences. State constraints.}
+
+## MANDATORY: Grep MCP Before {Action}
+
+**Use `grep_query` to find battle-tested patterns.** NON-NEGOTIABLE.
+
+```
+grep_query: query="{relevant pattern}", language="python"
+```
+
+## MANDATORY STARTUP (do this FIRST, every session)
+
+1. **Read LEARNINGS.md** -- check for relevant issues
+2. **TaskUpdate** your assigned task to `in_progress`
+3. **Grep local codebase** to study existing patterns:
+   ```
+   Grep "{relevant}" src/
+   Glob "{relevant pattern}"
+   Read the file you'll modify
+   ```
+
+## MANDATORY SHUTDOWN (do this LAST, every session)
+
+1. **TaskUpdate** your task to `completed` (ONLY if verification passes)
+2. Write **### Learnings** -- 1 line per item, max 120 chars:
+   - `MISTAKE: {what} → {fix}`  |  `PATTERN: {what} → {reuse}`  |  `GOTCHA: {surprise}`
+
+## {Agent-specific sections...}
+
+## Protected Paths (NEVER MODIFY)
+- `examples/`, `.env`, `.claude/PRD.md`
+```
+
 For EVERY code-editing agent you create, include:
 - PostToolUse format hooks (Write, Edit, MultiEdit) with the project's formatter
 - LSP in tools + MANDATORY getDiagnostics/goToDefinition/findReferences in instructions

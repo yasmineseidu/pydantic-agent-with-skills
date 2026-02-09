@@ -176,12 +176,53 @@ Response: ...
 Additional considerations.
 ```
 
-## Existing Skills (Reference)
+## Existing User-Facing Skills (`skills/`)
 - `weather/` - Simple API integration (Open-Meteo)
 - `code_review/` - Advanced multi-step with extensive references
 - `research_assistant/` - Semantic Scholar integration
 - `recipe_finder/` - MealDB/Spoonacular integration
 - `world_clock/` - Timezone operations
+
+## Agent-Reference Skills (`.claude/skills/`)
+
+These are DIFFERENT from user-facing skills. They're loaded by agents via `skills:` in YAML frontmatter.
+If asked to create one of these, follow this structure:
+
+**Location**: `.claude/skills/{name}/SKILL.md`
+
+**Existing agent-reference skills:**
+- `coding-conventions` -- formatting, naming, imports, LSP, grep-mcp, plan, learning, task tracking
+- `team-coordination` -- output format, CROSS-DOMAIN/BLOCKER, context tiers, task decomposition
+- `security-standards` -- secrets, validation, path traversal, OWASP
+- `research-patterns` -- search strategy, source evaluation, output format
+
+**Template:**
+```markdown
+---
+name: {skill-name}
+description: {1-2 sentence description. Be specific.}
+version: 1.0.0
+author: Agent Team System
+---
+
+# {Skill Title}
+
+{1-line purpose. State who MUST follow it.}
+
+## {Section} (MANDATORY)
+
+{Concrete rules with code examples. No vague guidance.}
+
+### Anti-Patterns (NEVER DO)
+- {specific thing to avoid}
+```
+
+**Rules:**
+1. Content must be CONCRETE -- exact commands, exact examples
+2. Mark critical sections `(MANDATORY)` or `(NON-NEGOTIABLE)`
+3. Include anti-patterns for every major rule
+4. After creating, add to agents' `skills:` list in YAML frontmatter
+5. Update CLAUDE.md skills table
 
 ## Output Format
 
