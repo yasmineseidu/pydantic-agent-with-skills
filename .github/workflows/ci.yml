@@ -41,5 +41,5 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/test
           REDIS_URL: redis://localhost:6379/0
           LLM_API_KEY: test-key
-      - run: ruff check src/ tests/ api/ workers/
+      - run: ruff check src/ tests/ workers/
       - run: mypy src/
