@@ -18,6 +18,8 @@ from src.agent import Agent, create_skill_agent, skill_agent
 from src.api.dependencies import get_agent_deps, get_db, get_settings
 from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
 from src.auth.dependencies import authenticate_websocket, get_current_user
+from src.collaboration.routing.agent_directory import AgentDirectory
+from src.collaboration.routing.agent_router import AgentRouter
 from src.db.models.agent import AgentORM, AgentStatusEnum
 from src.db.models.conversation import (
     ConversationORM,
@@ -27,6 +29,7 @@ from src.db.models.conversation import (
 )
 from src.db.models.user import UserORM
 from src.dependencies import AgentDependencies
+from src.moe.expert_gate import ExpertGate
 from src.settings import Settings
 
 if TYPE_CHECKING:
@@ -126,6 +129,119 @@ def _orm_to_agent_dna(agent_orm: AgentORM) -> Optional["AgentDNA"]:
         return None
 
 
+async def _route_to_agent(
+    *,
+    message: str,
+    team_id: UUID,
+    user_id: UUID,
+    current_agent_slug: str,
+    db: AsyncSession,
+    settings: Settings,
+    request_id: str,
+) -> str:
+    """Resolve the agent slug using routing feature flags.
+
+    If expert gate is enabled, prefer ExpertGate selection. Otherwise, if
+    agent collaboration is enabled, use the baseline AgentRouter. Falls
+    back to the requested agent_slug on any error or no selection.
+    """
+    try:
+        def _flag(name: str) -> bool:
+            try:
+                feature_flags = getattr(settings, "feature_flags", None)
+                if feature_flags is None:
+                    return False
+                value = getattr(feature_flags, name, False)
+                return value is True
+            except Exception:
+                return False
+
+        if _flag("enable_expert_gate"):
+            expert_gate = ExpertGate(settings)
+            selection = await expert_gate.select_best_agent(
+                session=db,
+                team_id=team_id,
+                task_description=message,
+            )
+            if not selection:
+                return current_agent_slug
+
+            stmt = select(AgentORM).where(
+                AgentORM.id == selection.expert_id,
+                AgentORM.team_id == team_id,
+            )
+            result = await db.execute(stmt)
+            agent_orm = result.scalar_one_or_none()
+            if not agent_orm or agent_orm.status != AgentStatusEnum.ACTIVE.value:
+                return current_agent_slug
+
+            if agent_orm.slug != current_agent_slug:
+                logger.info(
+                    "chat_routed_expert_gate: request_id=%s, from_slug=%s, to_slug=%s, "
+                    "agent_id=%s, score=%.2f",
+                    request_id,
+                    current_agent_slug,
+                    agent_orm.slug,
+                    agent_orm.id,
+                    selection.score.overall,
+                )
+
+            return agent_orm.slug
+
+        if _flag("enable_agent_collaboration"):
+            current_id_stmt = select(AgentORM.id).where(
+                AgentORM.slug == current_agent_slug,
+                AgentORM.team_id == team_id,
+            )
+            current_id_result = await db.execute(current_id_stmt)
+            current_agent_id = current_id_result.scalar_one_or_none()
+
+            directory = AgentDirectory(db)
+            agent_router = AgentRouter(directory, settings)
+            decision = await agent_router.route_to_agent(
+                query=message,
+                user_id=user_id,
+                current_agent_id=current_agent_id,
+            )
+
+            selected_id = decision.selected_agent_id
+            if not selected_id or selected_id.int == 0:
+                return current_agent_slug
+
+            stmt = select(AgentORM).where(
+                AgentORM.id == selected_id,
+                AgentORM.team_id == team_id,
+            )
+            result = await db.execute(stmt)
+            agent_orm = result.scalar_one_or_none()
+            if not agent_orm or agent_orm.status != AgentStatusEnum.ACTIVE.value:
+                return current_agent_slug
+
+            if agent_orm.slug != current_agent_slug:
+                logger.info(
+                    "chat_routed_agent_router: request_id=%s, from_slug=%s, to_slug=%s, "
+                    "agent_id=%s, confidence=%.2f, reason=%s",
+                    request_id,
+                    current_agent_slug,
+                    agent_orm.slug,
+                    agent_orm.id,
+                    decision.confidence,
+                    decision.reasoning,
+                )
+
+            return agent_orm.slug
+
+        return current_agent_slug
+    except Exception as exc:
+        logger.warning(
+            "chat_routing_failed: request_id=%s, agent_slug=%s, error=%s",
+            request_id,
+            current_agent_slug,
+            str(exc),
+        )
+        return current_agent_slug
+
+
 @router.post(
     "/{agent_slug}/chat",
     response_model=ChatResponse,
@@ -201,6 +317,16 @@ async def chat(
     # ---------------------------------------------------------------
     # Step 1: Resolve agent by slug + team_id
     # ---------------------------------------------------------------
+    agent_slug = await _route_to_agent(
+        message=body.message,
+        team_id=team_id,
+        user_id=user.id,
+        current_agent_slug=agent_slug,
+        db=db,
+        settings=settings,
+        request_id=request_id,
+    )
+
     stmt = select(AgentORM).where(
         AgentORM.slug == agent_slug,
         AgentORM.team_id == team_id,
@@ -229,8 +355,8 @@ async def chat(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent '{agent_slug}' is not active",
-        )
+        detail=f"Agent '{agent_slug}' is not active",
+    )
 
     logger.info(
         "chat_agent_resolved: request_id=%s, agent_id=%s, agent_name=%s",
@@ -593,6 +719,16 @@ async def _stream_agent_response(
         # ---------------------------------------------------------------
         # Step 1: Resolve agent by slug + team_id
         # ---------------------------------------------------------------
+        agent_slug = await _route_to_agent(
+            message=body.message,
+            team_id=team_id,
+            user_id=user.id,
+            current_agent_slug=agent_slug,
+            db=db,
+            settings=settings,
+            request_id=request_id,
+        )
+
         stmt = select(AgentORM).where(
             AgentORM.slug == agent_slug,
             AgentORM.team_id == team_id,
