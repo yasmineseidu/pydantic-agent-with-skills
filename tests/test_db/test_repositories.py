@@ -28,7 +28,7 @@ class TestBaseRepositoryStructure:
 
     def test_base_repository_is_generic(self) -> None:
         """BaseRepository must be a Generic[T] class."""
-        assert issubclass(BaseRepository, Generic)
+        assert issubclass(BaseRepository, Generic)  # type: ignore[arg-type]
 
     def test_base_repository_init(self) -> None:
         """BaseRepository.__init__ must accept session and model_class."""

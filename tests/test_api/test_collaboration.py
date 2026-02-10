@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -273,7 +273,7 @@ async def test_update_session_status_commits(auth_client, app, db_session) -> No
         new=AsyncMock(return_value=session),
     ):
         app.dependency_overrides[get_settings] = lambda: test_settings
-        response = await auth_client.patch(
+        await auth_client.patch(
             f"/v1/collaboration/sessions/{session.id}/status",
             json={"status": "completed", "final_result": "done"},
         )

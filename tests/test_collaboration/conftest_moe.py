@@ -1,11 +1,10 @@
 """Additional fixtures for MoE (Mixture of Experts) testing."""
 
 from typing import List
-from uuid import uuid4
 
 import pytest
 
-from src.collaboration.types import ExpertScore
+from src.moe.models import ExpertScore
 
 
 @pytest.fixture
@@ -17,44 +16,34 @@ def sample_expert_scores() -> List[ExpertScore]:
     """
     return [
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.9,
             skill_match=0.95,
-            context_match=0.85,
-            availability=1.0,
-            metadata={"rank": 1},
+            past_performance=0.85,
+            personality_fit=0.75,
+            load_balance=0.90,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.75,
             skill_match=0.80,
-            context_match=0.70,
-            availability=1.0,
-            metadata={"rank": 2},
+            past_performance=0.70,
+            personality_fit=0.65,
+            load_balance=0.85,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.65,
             skill_match=0.70,
-            context_match=0.60,
-            availability=1.0,
-            metadata={"rank": 3},
+            past_performance=0.60,
+            personality_fit=0.55,
+            load_balance=0.80,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.50,
             skill_match=0.55,
-            context_match=0.45,
-            availability=0.8,
-            metadata={"rank": 4},
+            past_performance=0.45,
+            personality_fit=0.40,
+            load_balance=0.75,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.35,
             skill_match=0.40,
-            context_match=0.30,
-            availability=0.5,
-            metadata={"rank": 5},
+            past_performance=0.30,
+            personality_fit=0.25,
+            load_balance=0.60,
         ),
     ]
 
@@ -68,25 +57,22 @@ def high_confidence_scores() -> List[ExpertScore]:
     """
     return [
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.95,
             skill_match=0.97,
-            context_match=0.93,
-            availability=1.0,
+            past_performance=0.93,
+            personality_fit=0.90,
+            load_balance=0.95,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.85,
             skill_match=0.87,
-            context_match=0.83,
-            availability=1.0,
+            past_performance=0.83,
+            personality_fit=0.80,
+            load_balance=0.90,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.75,
             skill_match=0.77,
-            context_match=0.73,
-            availability=1.0,
+            past_performance=0.73,
+            personality_fit=0.70,
+            load_balance=0.85,
         ),
     ]
 
@@ -100,25 +86,22 @@ def low_confidence_scores() -> List[ExpertScore]:
     """
     return [
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.55,
             skill_match=0.60,
-            context_match=0.50,
-            availability=1.0,
+            past_performance=0.50,
+            personality_fit=0.45,
+            load_balance=0.55,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.45,
             skill_match=0.50,
-            context_match=0.40,
-            availability=0.8,
+            past_performance=0.40,
+            personality_fit=0.35,
+            load_balance=0.50,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.35,
             skill_match=0.40,
-            context_match=0.30,
-            availability=0.6,
+            past_performance=0.30,
+            personality_fit=0.25,
+            load_balance=0.45,
         ),
     ]
 
@@ -132,31 +115,27 @@ def mixed_confidence_scores() -> List[ExpertScore]:
     """
     return [
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.90,
             skill_match=0.92,
-            context_match=0.88,
-            availability=1.0,
+            past_performance=0.88,
+            personality_fit=0.84,
+            load_balance=0.90,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.40,
             skill_match=0.45,
-            context_match=0.35,
-            availability=0.9,
+            past_performance=0.35,
+            personality_fit=0.30,
+            load_balance=0.40,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.70,
             skill_match=0.75,
-            context_match=0.65,
-            availability=1.0,
+            past_performance=0.65,
+            personality_fit=0.60,
+            load_balance=0.70,
         ),
         ExpertScore(
-            agent_id=uuid4(),
-            confidence=0.25,
             skill_match=0.30,
-            context_match=0.20,
-            availability=0.5,
+            past_performance=0.20,
+            personality_fit=0.15,
+            load_balance=0.25,
         ),
     ]

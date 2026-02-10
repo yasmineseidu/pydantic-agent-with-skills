@@ -3,8 +3,8 @@
 from unittest.mock import MagicMock
 
 import pytest
-from celery import Celery
-from celery.schedules import crontab
+from celery import Celery  # type: ignore[import-untyped]
+from celery.schedules import crontab  # type: ignore[import-untyped]
 
 from workers.schedules import BEAT_SCHEDULE, configure_beat_schedule
 
