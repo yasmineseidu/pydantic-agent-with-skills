@@ -19,14 +19,12 @@ class Settings(BaseSettings):
 
     # Skills Configuration
     skills_dir: Path = Field(
-        default=Path("skills"),
-        description="Directory containing skill definitions"
+        default=Path("skills"), description="Directory containing skill definitions"
     )
 
     # LLM Configuration (OpenAI-compatible)
     llm_provider: Literal["openrouter", "openai", "ollama"] = Field(
-        default="openrouter",
-        description="LLM provider to use"
+        default="openrouter", description="LLM provider to use"
     )
 
     llm_api_key: str = Field(..., description="API key for the LLM provider")
@@ -43,12 +41,10 @@ class Settings(BaseSettings):
 
     # OpenRouter-Specific (Optional)
     openrouter_app_url: Optional[str] = Field(
-        default=None,
-        description="App URL for OpenRouter analytics (optional)"
+        default=None, description="App URL for OpenRouter analytics (optional)"
     )
     openrouter_app_title: Optional[str] = Field(
-        default=None,
-        description="App title for OpenRouter tracking (optional)"
+        default=None, description="App title for OpenRouter tracking (optional)"
     )
 
     # Application Settings
@@ -57,17 +53,26 @@ class Settings(BaseSettings):
 
     # Logfire (Optional)
     logfire_token: Optional[str] = Field(
-        default=None,
-        description="Logfire API token from 'logfire auth' (optional)"
+        default=None, description="Logfire API token from 'logfire auth' (optional)"
     )
-    logfire_service_name: str = Field(
-        default="skill-agent",
-        description="Service name in Logfire"
-    )
+    logfire_service_name: str = Field(default="skill-agent", description="Service name in Logfire")
     logfire_environment: str = Field(
-        default="development",
-        description="Environment (development, production, etc.)"
+        default="development", description="Environment (development, production, etc.)"
     )
+
+    # Database (Optional - enables persistence)
+    database_url: Optional[str] = Field(
+        default=None, description="PostgreSQL connection URL (postgresql+asyncpg://...)"
+    )
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_pool_overflow: int = Field(default=10, ge=0, le=100)
+
+    # Embeddings (Optional - enables semantic search)
+    embedding_model: str = Field(default="text-embedding-3-small")
+    embedding_api_key: Optional[str] = Field(
+        default=None, description="OpenAI API key for embeddings (defaults to llm_api_key)"
+    )
+    embedding_dimensions: int = Field(default=1536)
 
 
 def load_settings() -> Settings:

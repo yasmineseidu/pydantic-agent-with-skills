@@ -17,6 +17,9 @@
 - PATTERN: MockContext → `@dataclass MockContext(deps=MockDependencies)` for testing
 - PATTERN: ruff format+check → single tool, line-length=100
 - PATTERN: Google docstrings → Args/Returns/Raises on all public functions
+- PATTERN: ORM suffix convention → `UserORM` avoids collision with Pydantic `UserCreate`
+- PATTERN: SA metadata column → map `metadata` as `metadata_json` in Python (SA reserved word)
+- PATTERN: Settings Optional fields → all new DB fields Optional so CLI works without DB
 
 ## Gotchas
 
@@ -26,6 +29,9 @@
 - GOTCHA: asyncio_mode=auto → tests don't need `@pytest.mark.asyncio` but use it for clarity
 - GOTCHA: imports → `from src.module import Class` (not relative imports)
 - GOTCHA: .env.example → contains real credentials (flagged, not fixed)
+- GOTCHA: memory_log.memory_id → NO FK intentionally (ADR-8: survives memory deletes)
+- GOTCHA: pgvector IVFFlat → needs `CREATE EXTENSION vector` before index creation
+- GOTCHA: SA JSONB defaults → use `server_default=text("'{...}'::jsonb")` not `default={}`
 
 ## Architecture
 
@@ -33,6 +39,7 @@
 - DECISION: `BaseModel SkillMetadata` → validation
 - DECISION: `BaseSettings Settings` → env var loading
 - DECISION: skills are filesystem-based → no DB for MVP
+- DECISION: Phase 1 DB → 9 tables, src/db/ + src/models/ packages, 19 tasks in 9 waves
 
 ## Useful Grep Patterns
 
@@ -50,3 +57,4 @@
 - 2026-02-09 grep-mcp: WebSearch+WebFetch on 5 coding agents, 3-layer enforcement
 - 2026-02-09 4-enforce: LSP + Plan + Learning + TaskMgmt mandatory across all agents
 - 2026-02-09 settings: MCP settings in .claude/settings.json + ~/.claude/settings.json, grep-local-first mandatory, non-verbose learnings
+- 2026-02-09 prd-phase1: 19 tasks created (#6-#24), 9 waves, 7 tracks, critical path 8 deep
