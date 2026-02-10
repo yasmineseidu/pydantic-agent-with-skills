@@ -1,12 +1,14 @@
 """Five-signal memory retrieval pipeline."""
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
 import math
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +25,9 @@ from src.memory.types import (
 )
 from src.models.agent_models import RetrievalWeights
 from src.models.memory_models import MemoryRecord, MemoryType
+
+if TYPE_CHECKING:
+    from src.cache.hot_cache import HotMemoryCache
 
 logger = logging.getLogger(__name__)
 
@@ -279,19 +284,20 @@ class MemoryRetriever:
 
     Implements a 7-step retrieval process:
     1. Generate query embedding
-    2. Check L1 hot cache
+    2. Check L0 in-memory cache, then L1 Redis hot cache
     3. Run 5-signal parallel search (semantic, recency, importance,
        continuity, relationship)
     4. Merge, deduplicate, and score results
     5. Apply token budget allocation
     6. Format memories for prompt injection
-    7. Fire-and-forget access metadata update
+    7. Fire-and-forget access metadata update + warm L1 cache
 
     Args:
         session: Async SQLAlchemy session for database operations.
         embedding_service: Service for generating text embeddings.
         retrieval_weights: Per-signal weights for composite scoring.
         token_budget_manager: Manager for token budget allocation.
+        hot_cache: Optional L1 Redis cache for frequently-accessed memories.
     """
 
     def __init__(
@@ -300,6 +306,7 @@ class MemoryRetriever:
         embedding_service: EmbeddingService,
         retrieval_weights: RetrievalWeights,
         token_budget_manager: TokenBudgetManager,
+        hot_cache: Optional[HotMemoryCache] = None,
     ) -> None:
         self._session: AsyncSession = session
         self._embedding_service: EmbeddingService = embedding_service
@@ -307,6 +314,7 @@ class MemoryRetriever:
         self._budget_manager: TokenBudgetManager = token_budget_manager
         self._repo: MemoryRepository = MemoryRepository(session)
         self._cache: dict[str, _CacheEntry] = {}
+        self._hot_cache: Optional[HotMemoryCache] = hot_cache
 
     async def retrieve(
         self,
@@ -354,6 +362,50 @@ class MemoryRetriever:
         # Evict expired entry if present
         if cached_entry is not None:
             del self._cache[cache_key]
+
+        # Step 2b: Check L1 Redis hot cache
+        if self._hot_cache is not None and agent_id is not None:
+            user_id_for_cache = team_id  # Use team_id as user scope
+            cached_memories = await self._hot_cache.get_memories(
+                agent_id=agent_id,
+                user_id=user_id_for_cache,
+                limit=20,
+            )
+            if cached_memories is not None:
+                # L1 hit — reconstruct RetrievalResult from cached data
+                elapsed_ms = (time.monotonic() - start_time) * 1000.0
+                logger.info(
+                    "retrieve: hot_cache_hit=True query_length=%d elapsed_ms=%.1f",
+                    len(query),
+                    elapsed_ms,
+                )
+                # Reconstruct ScoredMemory objects from cached dicts
+                scored_memories_from_cache: list[ScoredMemory] = []
+                for mem_dict in cached_memories:
+                    try:
+                        sm = ScoredMemory.model_validate(mem_dict)
+                        scored_memories_from_cache.append(sm)
+                    except Exception:
+                        continue  # Skip malformed cache entries
+
+                if scored_memories_from_cache:
+                    contradictions = _detect_contradictions(scored_memories_from_cache)
+                    formatted_prompt = _format_prompt(scored_memories_from_cache, contradictions)
+                    stats = RetrievalStats(
+                        signals_hit=self._count_signals_hit(scored_memories_from_cache),
+                        cache_hit=True,
+                        total_ms=elapsed_ms,
+                        query_tokens=self._budget_manager.estimate_tokens(query),
+                    )
+                    result = RetrievalResult(
+                        memories=scored_memories_from_cache,
+                        formatted_prompt=formatted_prompt,
+                        stats=stats,
+                        contradictions=contradictions,
+                    )
+                    # Also populate L0
+                    self._cache[cache_key] = _CacheEntry(result)
+                    return result
 
         # Step 3: 5-signal parallel search
         # Run semantic search and team-wide recency fetch concurrently
@@ -412,6 +464,15 @@ class MemoryRetriever:
         memory_ids: list[UUID] = [sm.memory.id for sm in included_memories]
         if memory_ids:
             asyncio.create_task(self._update_access_metadata(memory_ids))
+
+        # Warm L1 Redis hot cache (fire-and-forget)
+        if self._hot_cache is not None and agent_id is not None:
+            user_id_for_cache = team_id
+            # Serialize ScoredMemory objects to dicts for Redis storage
+            memory_dicts = [sm.model_dump() for sm in included_memories]
+            asyncio.create_task(
+                self._hot_cache.warm_cache(agent_id, user_id_for_cache, memory_dicts)
+            )
 
         logger.info(
             "retrieve: cache_hit=False memories=%d trimmed=%d elapsed_ms=%.1f budget_used=%d",

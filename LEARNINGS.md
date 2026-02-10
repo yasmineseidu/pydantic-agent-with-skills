@@ -32,6 +32,13 @@
 - PATTERN: token estimation → `math.ceil(len(text)/3.5)` heuristic, good enough for budget trimming
 - PATTERN: FeatureFlags nested model → `settings.feature_flags.enable_memory` for runtime toggles
 
+- PATTERN: graceful degradation → check `redis_manager.available` before ops, return None on failure
+- PATTERN: Redis key namespacing → `{prefix}{type}:{scope_ids}` (e.g. `ska:hot:{agent_id}:{user_id}`)
+- PATTERN: fakeredis for testing → `fakeredis[lua]~=2.26.0` with FakeAsyncRedis, no real Redis needed
+- PATTERN: L0/L1/L2 cache hierarchy → in-memory dict (L0) → Redis (L1) → PostgreSQL (L2)
+- PATTERN: Redis pipeline transactions → DEL + ZADD + EXPIRE atomic in hot_cache warm_cache()
+- PATTERN: token-bucket rate limiter → INCR + EXPIRE atomic, degrades to allow-all when Redis down
+
 ## Gotchas
 
 - GOTCHA: YAML frontmatter → must strip `---` delimiters before returning skill body
@@ -45,6 +52,9 @@
 - GOTCHA: SA JSONB defaults → use `server_default=text("'{...}'::jsonb")` not `default={}`
 - GOTCHA: FunctionToolset[None] mypy error → pre-existing pydantic-ai type issue, ignore
 - GOTCHA: cosine similarity dedup threshold → 0.95 for extraction, 0.92 for DB duplicate check
+- GOTCHA: Redis ZSET scores are floats → ScoredMemory.final_score maps directly to ZADD score
+- GOTCHA: Redis unavailable → return safe defaults (None, True, []), NEVER raise
+- GOTCHA: fakeredis TTL timing → `assert 86399 <= ttl <= 86400` not exact equality (1s drift)
 - GOTCHA: httpx code fence parsing → LLMs wrap JSON in ```json...```, must strip before json.loads
 - GOTCHA: tier_manager demotion → never demote identity type, pinned, or importance >= 8
 
@@ -58,6 +68,8 @@
 - DECISION: Phase 2 Memory → 10 modules in src/memory/, 4 in src/moe/, 14 test files, 273 new tests
 - DECISION: compaction shield feature-flagged → `enable_compaction_shield` controls extraction before trim
 - DECISION: CostGuard uses asyncio.Lock → in-memory daily/monthly budget tracking, no DB needed
+- DECISION: Phase 3 Redis → feature-flagged `enable_redis_cache`, 4 cache modules, 86 new tests
+- DECISION: Redis integration opt-in → `hot_cache` and `redis_cache` params default to None
 
 ## Useful Grep Patterns
 
@@ -78,3 +90,4 @@
 - 2026-02-09 prd-phase1: 19 tasks created (#6-#24), 9 waves, 7 tracks, critical path 8 deep
 - 2026-02-09 phase2-build: 24 tasks, 7 waves, 21 agents deployed, 445 tests (273 new), 0 failures
 - 2026-02-09 phase2-commit: 106df03 pushed to main, 49 files changed, 11232 lines added
+- 2026-02-09 phase3-build: 18 tasks, 6 waves, ~12 agents deployed, 531 tests (86 new), 0 failures

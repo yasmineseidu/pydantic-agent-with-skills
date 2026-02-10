@@ -28,6 +28,13 @@ if TYPE_CHECKING:
     from src.moe.model_router import ModelRouter
     from src.moe.cost_guard import CostGuard
 
+    # Phase 3: Cache imports
+    from src.cache.client import RedisManager
+    from src.cache.hot_cache import HotMemoryCache
+    from src.cache.working_memory import WorkingMemoryCache
+    from src.cache.embedding_cache import EmbeddingCache
+    from src.cache.rate_limiter import RateLimiter
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,6 +68,13 @@ class AgentDependencies:
     complexity_scorer: Optional["QueryComplexityScorer"] = None
     model_router: Optional["ModelRouter"] = None
     cost_guard: Optional["CostGuard"] = None
+
+    # Cache layer (Phase 3 - initialized externally)
+    redis_manager: Optional["RedisManager"] = None
+    hot_cache: Optional["HotMemoryCache"] = None
+    working_memory: Optional["WorkingMemoryCache"] = None
+    embedding_cache: Optional["EmbeddingCache"] = None
+    rate_limiter: Optional["RateLimiter"] = None
 
     async def initialize(self) -> None:
         """

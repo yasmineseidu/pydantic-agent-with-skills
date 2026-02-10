@@ -27,6 +27,7 @@ class FeatureFlags(BaseModel):
     enable_agent_collaboration: bool = Field(default=False, description="Phase 7: Router, handoff")
     enable_webhooks: bool = Field(default=False, description="Phase 9: Outbound webhooks")
     enable_integrations: bool = Field(default=False, description="Phase 9: Telegram/Slack")
+    enable_redis_cache: bool = Field(default=False, description="Phase 3: Redis caching layer")
 
 
 class Settings(BaseSettings):
@@ -92,6 +93,12 @@ class Settings(BaseSettings):
         default=None, description="OpenAI API key for embeddings (defaults to llm_api_key)"
     )
     embedding_dimensions: int = Field(default=1536)
+
+    # Redis (Optional - enables caching layer)
+    redis_url: Optional[str] = Field(
+        default=None, description="Redis connection URL (redis://localhost:6379/0)"
+    )
+    redis_key_prefix: str = Field(default="ska:", description="Redis key namespace prefix")
 
     # Feature Flags
     feature_flags: FeatureFlags = Field(

@@ -1,11 +1,17 @@
 """Embedding service with caching and retry logic."""
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
 import httpx
+
+if TYPE_CHECKING:
+    from src.cache.embedding_cache import EmbeddingCache
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +24,21 @@ MAX_CACHE_SIZE: int = 1000
 
 
 class EmbeddingService:
-    """Async embedding service with LRU caching and exponential backoff.
+    """Async embedding service with L1 LRU + optional L2 Redis caching and exponential backoff.
 
     Provides single-text and batch embedding via the OpenAI-compatible
-    embeddings API. Caches results in an in-memory LRU dict keyed by
-    SHA-256 of normalized text.
+    embeddings API. Three-tier caching strategy:
+    - L1: In-memory LRU cache (1000 entries, instant)
+    - L2: Optional Redis cache (24h TTL, milliseconds)
+    - L3: API call (seconds, costs money)
 
     Attributes:
         _api_key: API key for the embeddings provider (never logged).
         _model: Embedding model name.
         _dimensions: Output vector dimensionality.
         _base_url: Base URL for the embeddings API.
-        _cache: OrderedDict acting as an LRU cache.
+        _cache: OrderedDict acting as L1 LRU cache.
+        _redis_cache: Optional EmbeddingCache for L2 persistent cache.
     """
 
     def __init__(
@@ -38,6 +47,7 @@ class EmbeddingService:
         model: str = "text-embedding-3-small",
         dimensions: int = 1536,
         base_url: str = "https://api.openai.com/v1",
+        redis_cache: EmbeddingCache | None = None,
     ) -> None:
         """Initialize the embedding service.
 
@@ -46,12 +56,14 @@ class EmbeddingService:
             model: Embedding model name.
             dimensions: Output vector dimensionality.
             base_url: Base URL for the embeddings API.
+            redis_cache: Optional Redis cache for L2 persistent caching.
         """
         self._api_key: str = api_key
         self._model: str = model
         self._dimensions: int = dimensions
         self._base_url: str = base_url.rstrip("/")
         self._cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._redis_cache: EmbeddingCache | None = redis_cache
 
     def _cache_key(self, text: str) -> str:
         """Compute a cache key from normalized text.
@@ -176,7 +188,7 @@ class EmbeddingService:
         raise RuntimeError(last_error or "Embedding API failed after retries")
 
     async def embed_text(self, text: str) -> list[float]:
-        """Embed a single text string, using cache when available.
+        """Embed a single text string, using L1 LRU → L2 Redis → L3 API tiers.
 
         Args:
             text: The text to embed.
@@ -188,17 +200,32 @@ class EmbeddingService:
             RuntimeError: If the API call fails after retries.
         """
         key: str = self._cache_key(text)
-        cached: list[float] | None = self._cache_get(key)
 
+        # L1: Check in-memory LRU cache
+        cached: list[float] | None = self._cache_get(key)
         if cached is not None:
-            logger.info(f"embedding_generated: text_length={len(text)}, cached=True")
+            logger.info(f"embedding_generated: text_length={len(text)}, source=l1_lru")
             return cached
 
+        # L2: Check Redis cache
+        if self._redis_cache is not None:
+            redis_cached: list[float] | None = await self._redis_cache.get_embedding(text)
+            if redis_cached is not None:
+                # Promote to L1
+                self._cache_put(key, redis_cached)
+                logger.info(f"embedding_generated: text_length={len(text)}, source=l2_redis")
+                return redis_cached
+
+        # L3: Call API
         embeddings: list[list[float]] = await self._call_api(text)
         embedding: list[float] = embeddings[0]
 
+        # Store in L1 + L2
         self._cache_put(key, embedding)
-        logger.info(f"embedding_generated: text_length={len(text)}, cached=False")
+        if self._redis_cache is not None:
+            await self._redis_cache.store_embedding(text, embedding)
+
+        logger.info(f"embedding_generated: text_length={len(text)}, source=l3_api")
 
         return embedding
 
@@ -207,10 +234,10 @@ class EmbeddingService:
         texts: list[str],
         batch_size: int = 100,
     ) -> list[list[float]]:
-        """Embed a list of texts in batches, using cache when available.
+        """Embed a list of texts in batches, using L1 → L2 → L3 cache tiers.
 
         Splits the input into batches of ``batch_size``. Each batch is
-        sent as a single API call. Texts already in the cache are served
+        sent as a single API call. Texts already in L1 or L2 cache are served
         from cache and excluded from the API request.
 
         Args:
@@ -226,7 +253,7 @@ class EmbeddingService:
         if not texts:
             return []
 
-        # Build results array; fill from cache where possible
+        # L1: Build results array; fill from LRU cache where possible
         results: list[list[float] | None] = [None] * len(texts)
         uncached_indices: list[int] = []
 
@@ -238,10 +265,27 @@ class EmbeddingService:
             else:
                 uncached_indices.append(i)
 
-        # Batch the uncached texts
+        # L2: Check Redis for remaining uncached texts
+        still_uncached_indices: list[int] = []
+        if self._redis_cache is not None:
+            for i in uncached_indices:
+                redis_cached: list[float] | None = await self._redis_cache.get_embedding(texts[i])
+                if redis_cached is not None:
+                    results[i] = redis_cached
+                    # Promote to L1
+                    cache_key: str = self._cache_key(texts[i])
+                    self._cache_put(cache_key, redis_cached)
+                else:
+                    still_uncached_indices.append(i)
+        else:
+            still_uncached_indices = uncached_indices
+
+        # L3: Batch the remaining uncached texts via API
         batch_count: int = 0
-        for batch_start in range(0, len(uncached_indices), batch_size):
-            batch_indices: list[int] = uncached_indices[batch_start : batch_start + batch_size]
+        for batch_start in range(0, len(still_uncached_indices), batch_size):
+            batch_indices: list[int] = still_uncached_indices[
+                batch_start : batch_start + batch_size
+            ]
             batch_texts: list[str] = [texts[i] for i in batch_indices]
 
             embeddings: list[list[float]] = await self._call_api(batch_texts)
@@ -249,8 +293,11 @@ class EmbeddingService:
 
             for idx, embedding in zip(batch_indices, embeddings):
                 results[idx] = embedding
-                cache_key: str = self._cache_key(texts[idx])
+                cache_key = self._cache_key(texts[idx])
                 self._cache_put(cache_key, embedding)
+                # Store in L2 Redis
+                if self._redis_cache is not None:
+                    await self._redis_cache.store_embedding(texts[idx], embedding)
 
         logger.info(f"embedding_batch: batch_count={batch_count}, total_texts={len(texts)}")
 
