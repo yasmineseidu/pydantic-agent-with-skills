@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -21,12 +22,12 @@ async def test_aggregate_responses_requires_feature_flag() -> None:
     with pytest.raises(ValueError):
         await aggregator.aggregate_responses(
             [
-                ExpertResponse(
-                    expert_id="11111111-1111-1111-1111-111111111111",
-                    expert_name="Analyst",
-                    response="Output",
-                    confidence=0.9,
-                )
+        ExpertResponse(
+            expert_id=uuid4(),
+            expert_name="Analyst",
+            response="Output",
+            confidence=0.9,
+        )
             ]
         )
 
@@ -37,13 +38,13 @@ async def test_aggregate_responses_synthesis() -> None:
 
     responses = [
         ExpertResponse(
-            expert_id="11111111-1111-1111-1111-111111111111",
+            expert_id=uuid4(),
             expert_name="Analyst",
             response="First response",
             confidence=0.9,
         ),
         ExpertResponse(
-            expert_id="22222222-2222-2222-2222-222222222222",
+            expert_id=uuid4(),
             expert_name="Reviewer",
             response="Second response",
             confidence=0.8,

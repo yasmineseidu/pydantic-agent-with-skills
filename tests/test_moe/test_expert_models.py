@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from uuid import uuid4
+
 from src.moe.models import AggregatedResponse, ExpertResponse, ExpertScore, SelectionResult
 
 
@@ -45,7 +47,7 @@ def test_selection_result_schema() -> None:
         load_balance=7.0,
     )
     result = SelectionResult(
-        expert_id="11111111-1111-1111-1111-111111111111",
+        expert_id=uuid4(),
         expert_name="Expert",
         score=score,
         reasoning="Matched skills",
@@ -58,7 +60,7 @@ def test_selection_result_schema() -> None:
 def test_aggregated_response_contains_experts() -> None:
     """AggregatedResponse should include expert responses."""
     response = ExpertResponse(
-        expert_id="22222222-2222-2222-2222-222222222222",
+        expert_id=uuid4(),
         expert_name="Analyst",
         response="Output",
         confidence=0.9,

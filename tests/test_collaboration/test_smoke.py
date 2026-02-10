@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from src.collaboration.delegation.delegation_manager import DelegationManager
 from src.collaboration.models import AgentTaskStatus, CollaborationPattern
 from src.collaboration.orchestration.collaboration_orchestrator import CollaborationOrchestrator
 from src.moe.expert_gate import ExpertGate
+from src.settings import Settings
 
 
 @pytest.mark.asyncio
@@ -33,7 +35,9 @@ async def test_e2e_routing_smoke() -> None:
     result.scalars.return_value.all.return_value = [agent]
     session.execute = AsyncMock(return_value=result)
 
-    settings = SimpleNamespace(feature_flags=SimpleNamespace(enable_expert_gate=True))
+    settings = cast(
+        Settings, SimpleNamespace(feature_flags=SimpleNamespace(enable_expert_gate=True))
+    )
 
     gate = ExpertGate(settings)
     selection = await gate.select_best_agent(
@@ -74,6 +78,7 @@ async def test_e2e_delegation_smoke() -> None:
         priority=5,
     )
 
+    assert not isinstance(result, str)
     assert result.status == AgentTaskStatus.PENDING
 
 
@@ -95,7 +100,7 @@ async def test_e2e_collaboration_smoke() -> None:
     multi_agent.update_session_status = AsyncMock(return_value=base_session)
 
     orchestrator = CollaborationOrchestrator(session, multi_agent, handoff)
-    orchestrator.execute_pattern = AsyncMock(return_value=base_session)
+    orchestrator.execute_pattern = AsyncMock(return_value=base_session)  # type: ignore[method-assign]
 
     result = await orchestrator.orchestrate_collaboration(
         conversation_id=uuid4(),
@@ -111,7 +116,14 @@ async def test_e2e_collaboration_smoke() -> None:
 @pytest.mark.asyncio
 async def test_backward_compatibility_route_to_agent_no_flags() -> None:
     """Route helper should return current agent when flags disabled."""
-    settings = SimpleNamespace(feature_flags=SimpleNamespace(enable_expert_gate=False, enable_agent_collaboration=False))
+    settings = cast(
+        Settings,
+        SimpleNamespace(
+            feature_flags=SimpleNamespace(
+                enable_expert_gate=False, enable_agent_collaboration=False
+            )
+        ),
+    )
     session = AsyncMock()
 
     slug = await _route_to_agent(
