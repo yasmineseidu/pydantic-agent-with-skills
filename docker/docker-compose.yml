@@ -6,10 +6,18 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - ../.env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   worker:
     build:
@@ -17,8 +25,10 @@ services:
       dockerfile: docker/Dockerfile.worker
     command: celery -A workers.celery_app worker -l info
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - ../.env
 
@@ -28,7 +38,8 @@ services:
       dockerfile: docker/Dockerfile.worker
     command: celery -A workers.celery_app beat -l info
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     env_file:
       - ../.env
 
@@ -39,11 +50,21 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:

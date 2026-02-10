@@ -1,14 +1,50 @@
+# Version control
 .git
 .github
+
+# Python bytecode
 __pycache__
 *.pyc
+*.pyo
+
+# Environment and secrets
 .env
 .env.*
+
+# Virtual environments
 .venv
 venv
+
+# Package manager
 uv.lock
 *.egg-info
+
+# Test and coverage
+tests/
 htmlcov
 .pytest_cache
-.mypy_cache
 .coverage
+
+# Documentation (not needed in production image)
+docs/
+*.md
+!requirements*.md
+
+# Claude Code / agent infrastructure
+.claude/
+plan/
+reports/
+team-registry/
+examples/
+
+# Tooling caches
+.mypy_cache
+.ruff_cache
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+node_modules/
+scripts/

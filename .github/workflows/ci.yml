@@ -16,18 +16,18 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd="pg_isready -U postgres" \
-          --health-interval=5s \
-          --health-timeout=5s \
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
           --health-retries=5
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
-          --health-cmd="redis-cli ping" \
-          --health-interval=5s \
-          --health-timeout=5s \
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
           --health-retries=5
     steps:
       - uses: actions/checkout@v4
@@ -43,3 +43,22 @@ jobs:
           LLM_API_KEY: test-key
       - run: ruff check src/ tests/ workers/
       - run: mypy src/
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f docker/Dockerfile -t skill-agent-api .
+      - name: Build Worker image
+        run: docker build -f docker/Dockerfile.worker -t skill-agent-worker .
+      - name: Check image sizes
+        run: |
+          API_SIZE=$(docker image inspect skill-agent-api --format='{{.Size}}')
+          WORKER_SIZE=$(docker image inspect skill-agent-worker --format='{{.Size}}')
+          echo "API image size: $((API_SIZE / 1024 / 1024))MB"
+          echo "Worker image size: $((WORKER_SIZE / 1024 / 1024))MB"
+          if [ "$API_SIZE" -gt 524288000 ]; then echo "API image exceeds 500MB!" && exit 1; fi
+          if [ "$WORKER_SIZE" -gt 524288000 ]; then echo "Worker image exceeds 500MB!" && exit 1; fi
+      - name: Validate compose config
+        run: docker compose -f docker/docker-compose.yml config --quiet

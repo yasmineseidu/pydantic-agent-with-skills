@@ -79,7 +79,7 @@ RUN uv pip install --system -e .
 FROM python:3.11-slim AS app
 COPY --from=deps /usr/local /usr/local
 COPY src/ src/
-COPY api/ api/
+COPY workers/ workers/
 COPY skills/ skills/
 COPY alembic.ini .
 EXPOSE 8000
@@ -179,7 +179,7 @@ jobs:
       - run: uv pip install -e ".[dev]"
       - run: alembic upgrade head
       - run: pytest tests/ -v --tb=short
-      - run: ruff check src/ tests/ api/ workers/
+      - run: ruff check src/ tests/ workers/
       - run: mypy src/
 ```
 

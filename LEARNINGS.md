@@ -150,3 +150,12 @@
 - 2026-02-10 phase4.2-gaps: added /me, /logout, /stream, HealthResponse schema, 4 parallel builders, 783 tests pass
 - 2026-02-10 phase5-build: 25 tasks, 10 waves, ~20 agents deployed, 833 tests (50 new), 0 failures
 - 2026-02-10 phase7-gaps: 6 impl tasks, 3 files (709 LOC), 29 new tests, 1034 tests pass (100% rate), 0 failures
+- PATTERN: Docker entrypoint.sh → SKIP_MIGRATIONS=true env var for escape hatch, exec "$@" for signal forwarding
+- PATTERN: docker-compose health deps → depends_on with condition: service_healthy prevents race conditions
+- PATTERN: .dockerignore comprehensive → exclude tests/, docs/, *.md, .claude/, plan/, reports/, examples/, scripts/
+- PATTERN: CI docker-build job → build + inspect --format='{{.Size}}' for image size validation (< 500MB)
+- PATTERN: Docker config tests → parse YAML/text content, no Docker daemon required (fast, CI-safe)
+- GOTCHA: health endpoint already existed (Phase 4) → always grep before creating, saves duplicate work
+- GOTCHA: ruff format needed after heredoc-created Python files → always run ruff format after bash-based file creation
+- GOTCHA: .dockerignore at root is what Docker uses (not docker/.dockerignore) → keep both in sync
+- 2026-02-10 phase8-completion: 8 tasks, 4 waves, 53 new tests, 1087 total (1 skipped), 0 failures, all lint clean
