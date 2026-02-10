@@ -77,8 +77,8 @@ class TestTableRegistration:
         assert not missing, f"Missing tables: {missing}"
 
     def test_table_count(self, all_tables: set[str]) -> None:
-        """Exactly 9 tables should be registered."""
-        assert len(all_tables) == 14
+        """Exactly 21 tables should be registered (10 core + 4 auth + 7 collaboration)."""
+        assert len(all_tables) == 21
 
 
 # ---------------------------------------------------------------------------

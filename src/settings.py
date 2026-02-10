@@ -25,6 +25,12 @@ class FeatureFlags(BaseModel):
         default=True, description="Phase 2: Conflict detection"
     )
     enable_agent_collaboration: bool = Field(default=False, description="Phase 7: Router, handoff")
+    enable_expert_gate: bool = Field(default=False, description="Phase 7: MoE 4-signal scoring")
+    enable_ensemble_mode: bool = Field(default=False, description="Phase 7: Multi-expert responses")
+    enable_task_delegation: bool = Field(default=False, description="Phase 7: AgentTask system")
+    enable_collaboration: bool = Field(
+        default=False, description="Phase 7: Full collaboration sessions"
+    )
     enable_webhooks: bool = Field(default=False, description="Phase 9: Outbound webhooks")
     enable_integrations: bool = Field(default=False, description="Phase 9: Telegram/Slack")
     enable_redis_cache: bool = Field(default=False, description="Phase 3: Redis caching layer")
