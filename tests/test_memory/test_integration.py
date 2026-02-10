@@ -184,15 +184,15 @@ class TestMemoryPipelineIntegration:
     @pytest.mark.unit
     def test_create_skill_agent_singleton(self) -> None:
         """create_skill_agent() returns singleton."""
-        from src.agent import create_skill_agent, skill_agent
+        from src.agent import create_skill_agent, get_skill_agent
 
-        assert create_skill_agent() is skill_agent
+        assert create_skill_agent() is get_skill_agent()
 
     @pytest.mark.unit
     def test_create_skill_agent_with_dna(self, sample_agent_dna: Callable[..., AgentDNA]) -> None:
         """create_skill_agent(dna) creates new agent."""
-        from src.agent import create_skill_agent, skill_agent
+        from src.agent import create_skill_agent, get_skill_agent
 
         dna = sample_agent_dna()
         agent = create_skill_agent(agent_dna=dna)
-        assert agent is not skill_agent
+        assert agent is not get_skill_agent()

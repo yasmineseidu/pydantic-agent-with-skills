@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.api_keys import hash_api_key, validate_api_key_format
 from src.auth.jwt import decode_token, TokenPayload
 from src.auth.permissions import check_team_permission
+from src.api.dependencies import get_db
 from src.db.models.auth import ApiKeyORM
 from src.db.models.user import UserORM
 from src.db.engine import get_session
@@ -23,9 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 async def get_current_user(
+    request: Request,
     authorization: str = Header(...),
     settings: Settings = Depends(load_settings),
-    request: Request,
 ) -> tuple[UserORM, Optional[UUID]]:
     """
     Extract and validate user from Authorization header (JWT or API key).
@@ -66,10 +67,6 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Malformed Authorization header")
 
     auth_type, credential = parts
-
-    if request is None:
-        logger.error("get_current_user_error: reason=request_missing")
-        raise HTTPException(status_code=500, detail="Request context unavailable")
 
     engine = getattr(request.app.state, "engine", None)
     if engine is None:
@@ -190,10 +187,10 @@ async def get_current_user(
                 )
                 raise HTTPException(status_code=401, detail="User account is inactive")
 
-            # Update last_used_at (fire and forget - don't await)
-            # This is a common pattern for API key tracking
+            # Persist API key usage timestamp for observability/auditing.
             api_key.last_used_at = datetime.now(timezone.utc)
             session.add(api_key)
+            await session.commit()
 
             request.state.team_id = api_key.team_id
 
@@ -244,7 +241,7 @@ def require_role(required_role: str) -> Callable:
 
     async def role_checker(
         current_user: tuple[UserORM, Optional[UUID]] = Depends(get_current_user),
-        session: AsyncSession = Depends(),
+        session: AsyncSession = Depends(get_db),
     ) -> tuple[UserORM, Optional[UUID]]:
         """Check if user has required role level in their team."""
         user, team_id = current_user

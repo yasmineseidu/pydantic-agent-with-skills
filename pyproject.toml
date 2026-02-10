@@ -47,6 +47,9 @@ packages = ["src"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
+markers = [
+    "unit: unit tests",
+]
 
 [tool.ruff]
 line-length = 100

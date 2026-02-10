@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
-from src.agent import Agent, create_skill_agent, get_skill_agent
+from src.agent import Agent, create_skill_agent, skill_agent
 from src.api.dependencies import get_agent_deps, get_db, get_settings
 from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
 from src.auth.dependencies import authenticate_websocket, get_current_user
@@ -354,7 +354,7 @@ async def chat(
     # Step 5: Create agent instance
     # ---------------------------------------------------------------
     agent_dna = _orm_to_agent_dna(agent_orm)
-    active_agent = get_skill_agent()  # default fallback
+    active_agent = skill_agent  # default fallback
 
     if agent_dna is not None:
         try:
@@ -372,7 +372,7 @@ async def chat(
                 request_id,
                 str(e),
             )
-            active_agent = get_skill_agent()
+            active_agent = skill_agent
     else:
         logger.info(
             "chat_using_default_agent: request_id=%s, reason=dna_construction_failed",
@@ -698,7 +698,7 @@ async def _stream_agent_response(
         # Step 5: Create agent instance
         # ---------------------------------------------------------------
         agent_dna = _orm_to_agent_dna(agent_orm)
-        active_agent = get_skill_agent()  # default fallback
+        active_agent = skill_agent  # default fallback
 
         if agent_dna is not None:
             try:
@@ -709,7 +709,7 @@ async def _stream_agent_response(
                     request_id,
                     str(e),
                 )
-                active_agent = get_skill_agent()
+                active_agent = skill_agent
 
         # ---------------------------------------------------------------
         # Step 6: Stream agent response using agent.iter()

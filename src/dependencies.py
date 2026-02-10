@@ -35,6 +35,15 @@ if TYPE_CHECKING:
     from src.cache.embedding_cache import EmbeddingCache
     from src.cache.rate_limiter import RateLimiter
 
+    # Phase 7: Collaboration system imports
+    from src.collaboration.routing.agent_router import AgentRouter
+    from src.moe.expert_gate import ExpertGate
+    from src.collaboration.aggregation.response_aggregator import ResponseAggregator
+    from src.collaboration.routing.agent_directory import AgentDirectory
+    from src.collaboration.coordination.handoff_manager import HandoffManager
+    from src.collaboration.coordination.multi_agent_manager import MultiAgentManager
+    from src.collaboration.delegation.delegation_manager import DelegationManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,6 +84,15 @@ class AgentDependencies:
     working_memory: Optional["WorkingMemoryCache"] = None
     embedding_cache: Optional["EmbeddingCache"] = None
     rate_limiter: Optional["RateLimiter"] = None
+
+    # Collaboration system (Phase 7 - initialized externally)
+    router: Optional["AgentRouter"] = None
+    expert_gate: Optional["ExpertGate"] = None
+    aggregator: Optional["ResponseAggregator"] = None
+    directory: Optional["AgentDirectory"] = None
+    handoff: Optional["HandoffManager"] = None
+    multi_agent: Optional["MultiAgentManager"] = None
+    delegator: Optional["DelegationManager"] = None
 
     async def initialize(self) -> None:
         """

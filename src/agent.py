@@ -32,6 +32,31 @@ class AgentState(BaseModel):
     pass
 
 
+async def get_system_prompt(ctx: RunContext[AgentDependencies]) -> str:
+    """
+    Generate system prompt with skill metadata.
+
+    This dynamically injects skill metadata into the system prompt,
+    implementing Level 1 of progressive disclosure.
+
+    Args:
+        ctx: Agent runtime context with dependencies
+
+    Returns:
+        Complete system prompt with skill metadata injected
+    """
+    # Initialize dependencies (including skill loader)
+    await ctx.deps.initialize()
+
+    # Get skill metadata for prompt
+    skill_metadata = ""
+    if ctx.deps.skill_loader:
+        skill_metadata = ctx.deps.skill_loader.get_skill_metadata_prompt()
+
+    # Inject skill metadata into base prompt
+    return MAIN_SYSTEM_PROMPT.format(skill_metadata=skill_metadata)
+
+
 def _configure_logfire(settings: Settings) -> None:
     """Configure Logfire if token is present (one-time)."""
     global _logfire_configured
@@ -75,29 +100,8 @@ def _build_skill_agent() -> Agent[AgentDependencies, str]:
     )
 
     @agent.system_prompt
-    async def get_system_prompt(ctx: RunContext[AgentDependencies]) -> str:
-        """
-        Generate system prompt with skill metadata.
-
-        This dynamically injects skill metadata into the system prompt,
-        implementing Level 1 of progressive disclosure.
-
-        Args:
-            ctx: Agent runtime context with dependencies
-
-        Returns:
-            Complete system prompt with skill metadata injected
-        """
-        # Initialize dependencies (including skill loader)
-        await ctx.deps.initialize()
-
-        # Get skill metadata for prompt
-        skill_metadata = ""
-        if ctx.deps.skill_loader:
-            skill_metadata = ctx.deps.skill_loader.get_skill_metadata_prompt()
-
-        # Inject skill metadata into base prompt
-        return MAIN_SYSTEM_PROMPT.format(skill_metadata=skill_metadata)
+    async def _dynamic_system_prompt(ctx: RunContext[AgentDependencies]) -> str:
+        return await get_system_prompt(ctx)
 
     @agent.tool
     async def http_get_tool(
@@ -156,6 +160,20 @@ def get_skill_agent() -> Agent[AgentDependencies, str]:
         _configure_logfire(settings)
         _skill_agent = _build_skill_agent()
     return _skill_agent
+
+
+class _LazySkillAgentProxy:
+    """Backwards-compatible proxy for code importing `skill_agent`."""
+
+    def __getattr__(self, name: str):
+        return getattr(get_skill_agent(), name)
+
+    def __repr__(self) -> str:
+        return repr(get_skill_agent())
+
+
+# Backward-compatible export expected by older tests/callers.
+skill_agent = _LazySkillAgentProxy()
 
 
 def _create_model_for_provider(
