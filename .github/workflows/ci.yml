@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - run: uv pip install -e ".[dev]"
+      - run: uv pip install -e . --group dev
       - run: alembic upgrade head
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:test@localhost:5432/test
