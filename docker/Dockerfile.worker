@@ -1,0 +1,23 @@
+# Stage 1: dependencies
+FROM python:3.11-slim AS deps
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv pip install --system -e .
+
+# Stage 2: worker
+FROM python:3.11-slim AS worker
+
+ENV PYTHONPATH=/app/src
+WORKDIR /app
+
+COPY --from=deps /usr/local /usr/local
+COPY src/ src/
+COPY workers/ workers/
+COPY skills/ skills/
+COPY alembic.ini ./
+COPY pyproject.toml uv.lock ./
+
+CMD ["celery", "-A", "workers.celery_app", "worker", "-l", "info"]

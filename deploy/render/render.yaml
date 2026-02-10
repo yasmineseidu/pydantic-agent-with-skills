@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: skill-agent-api
+    env: docker
+    plan: starter
+    dockerfilePath: docker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: 8000
+
+  - type: worker
+    name: skill-agent-worker
+    env: docker
+    plan: starter
+    dockerfilePath: docker/Dockerfile.worker
+    dockerContext: .
+    startCommand: celery -A workers.celery_app worker -l info
+
+  - type: worker
+    name: skill-agent-beat
+    env: docker
+    plan: starter
+    dockerfilePath: docker/Dockerfile.worker
+    dockerContext: .
+    startCommand: celery -A workers.celery_app beat -l info
+
+  - type: redis
+    name: skill-agent-redis
+    plan: starter
+
+  - type: pserv
+    name: skill-agent-postgres
+    plan: starter
+    envVars:
+      - key: POSTGRES_DB
+        value: skill_agent
