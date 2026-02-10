@@ -31,6 +31,11 @@
 - PATTERN: wave-based parallel build → group tasks by deps, deploy 3-4 agents per wave, max parallel
 - PATTERN: token estimation → `math.ceil(len(text)/3.5)` heuristic, good enough for budget trimming
 - PATTERN: FeatureFlags nested model → `settings.feature_flags.enable_memory` for runtime toggles
+- PATTERN: confidence-based routing → threshold fallback prevents low-quality agent selection
+- PATTERN: template-driven reports → REPORT_TEMPLATES dict with section validation
+- PATTERN: feature flag cascade → enable_expert_gate → enable_ensemble_mode hierarchy
+- PATTERN: proactive exports → export new classes immediately when creating (saves Task later)
+- PATTERN: comprehensive test coverage → exceed requirements (17 vs 12, 12 vs 8) ensures quality
 
 - PATTERN: graceful degradation → check `redis_manager.available` before ops, return None on failure
 - PATTERN: Redis key namespacing → `{prefix}{type}:{scope_ids}` (e.g. `ska:hot:{agent_id}:{user_id}`)
@@ -53,6 +58,11 @@
 - PATTERN: fastapi.status alias → `from fastapi import status as http_status` when param named `status` exists
 - PATTERN: Starlette call_next typing → `response: Response = await call_next(request)` fixes no-any-return
 - PATTERN: Request.url.path → Starlette Request has no `.path`, use `.url.path` instead
+
+## Architecture
+
+- PATTERN: ExpertSelector strategies → TOP_1/TOP_K/ENSEMBLE/CASCADE for multi-agent routing
+- PATTERN: ReportManager delegation → wrap DelegationManager with report-specific templates
 
 ## Gotchas
 
@@ -83,6 +93,8 @@
 - GOTCHA: AsyncMock vs MagicMock for SA Result → `.scalar_one_or_none()` is SYNC, use MagicMock not AsyncMock
 - GOTCHA: db.refresh side_effect → create endpoint + flush + refresh needs mock that populates id/created_at
 - GOTCHA: test_table_count → when adding new ORM models, update assertion from 9 → 13 (import-order dependent)
+- GOTCHA: REPORT_TEMPLATES uses uppercase keys → need .upper() on report_type.value lookup
+- GOTCHA: ExpertSelector is sync not async → no pytest.mark.asyncio on tests
 
 ## Architecture
 
@@ -137,3 +149,4 @@
 - 2026-02-10 phase4.1-mypy: fixed 51 mypy errors across 8 files, 6 parallel builder agents, 0 Phase 4 mypy errors remain
 - 2026-02-10 phase4.2-gaps: added /me, /logout, /stream, HealthResponse schema, 4 parallel builders, 783 tests pass
 - 2026-02-10 phase5-build: 25 tasks, 10 waves, ~20 agents deployed, 833 tests (50 new), 0 failures
+- 2026-02-10 phase7-gaps: 6 impl tasks, 3 files (709 LOC), 29 new tests, 1034 tests pass (100% rate), 0 failures
