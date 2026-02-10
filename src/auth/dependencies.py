@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Header, WebSocket
+from fastapi import Depends, HTTPException, Header, Request, WebSocket
 from starlette.websockets import WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from src.auth.jwt import decode_token, TokenPayload
 from src.auth.permissions import check_team_permission
 from src.db.models.auth import ApiKeyORM
 from src.db.models.user import UserORM
+from src.db.engine import get_session
 from src.settings import Settings, load_settings
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def get_current_user(
     authorization: str = Header(...),
     settings: Settings = Depends(load_settings),
-    session: AsyncSession = Depends(lambda: None),  # Will be overridden by routes that use this
+    request: Request,
 ) -> tuple[UserORM, Optional[UUID]]:
     """
     Extract and validate user from Authorization header (JWT or API key).
@@ -35,7 +36,7 @@ async def get_current_user(
 
     Args:
         authorization: Authorization header value (required)
-        session: Async SQLAlchemy session for database operations
+        request: FastAPI request object (for app.state engine)
         settings: Application settings with JWT configuration
 
     Returns:
@@ -66,128 +67,146 @@ async def get_current_user(
 
     auth_type, credential = parts
 
-    # Route 1: Bearer JWT token
-    if auth_type.lower() == "bearer":
-        try:
-            payload: TokenPayload = decode_token(credential)
+    if request is None:
+        logger.error("get_current_user_error: reason=request_missing")
+        raise HTTPException(status_code=500, detail="Request context unavailable")
 
-            # Verify token type
-            if payload.token_type != "access":
-                logger.warning(
-                    f"get_current_user_error: reason=invalid_token_type, type={payload.token_type}"
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        logger.error("get_current_user_error: reason=engine_not_initialized")
+        raise HTTPException(
+            status_code=500,
+            detail="Database engine not initialized. Ensure DATABASE_URL is set and app lifespan has run.",
+        )
+
+    async for session in get_session(engine):
+        # Route 1: Bearer JWT token
+        if auth_type.lower() == "bearer":
+            try:
+                payload: TokenPayload = decode_token(credential)
+
+                # Verify token type
+                if payload.token_type != "access":
+                    logger.warning(
+                        f"get_current_user_error: reason=invalid_token_type, type={payload.token_type}"
+                    )
+                    raise HTTPException(status_code=401, detail="Invalid token type")
+
+                # Check expiry (decode_token already checks, but be explicit)
+                now = datetime.now(timezone.utc)
+                if payload.exp < now:
+                    logger.warning(
+                        f"get_current_user_error: reason=token_expired, user_id={payload.sub}"
+                    )
+                    raise HTTPException(status_code=401, detail="Token has expired")
+
+                # Look up user in database
+                stmt = select(UserORM).where(UserORM.id == payload.sub)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+
+                if not user:
+                    logger.warning(
+                        f"get_current_user_error: reason=user_not_found, user_id={payload.sub}"
+                    )
+                    raise HTTPException(status_code=401, detail="User not found")
+
+                if not user.is_active:
+                    logger.warning(f"get_current_user_error: reason=user_inactive, user_id={user.id}")
+                    raise HTTPException(status_code=401, detail="User account is inactive")
+
+                logger.info(
+                    f"get_current_user_success: auth_type=bearer, user_id={user.id}, "
+                    f"team_id={payload.team_id}, role={payload.role}"
                 )
-                raise HTTPException(status_code=401, detail="Invalid token type")
+                return user, payload.team_id
 
-            # Check expiry (decode_token already checks, but be explicit)
-            now = datetime.now(timezone.utc)
-            if payload.exp < now:
-                logger.warning(
-                    f"get_current_user_error: reason=token_expired, user_id={payload.sub}"
+            except ValueError as e:
+                # decode_token raises ValueError for invalid/expired tokens
+                logger.warning(f"get_current_user_error: reason=jwt_decode_failed, error={str(e)}")
+                raise HTTPException(status_code=401, detail=str(e)) from e
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.exception(
+                    f"get_current_user_error: reason=unexpected_jwt_error, error={str(e)}"
                 )
-                raise HTTPException(status_code=401, detail="Token has expired")
+                raise HTTPException(status_code=401, detail="Authentication failed") from e
 
-            # Look up user in database
-            stmt = select(UserORM).where(UserORM.id == payload.sub)
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
+        # Route 2: API Key
+        elif auth_type.lower() == "apikey":
+            # Validate format first (cheap check)
+            if not validate_api_key_format(credential):
+                logger.warning("get_current_user_error: reason=invalid_api_key_format")
+                raise HTTPException(status_code=401, detail="Invalid API key format")
+
+            # Hash key for lookup
+            key_hash = hash_api_key(credential)
+
+            # Look up API key in database
+            api_key_stmt = select(ApiKeyORM).where(ApiKeyORM.key_hash == key_hash)
+            api_key_result = await session.execute(api_key_stmt)
+            api_key = api_key_result.scalar_one_or_none()
+
+            if not api_key:
+                logger.warning("get_current_user_error: reason=api_key_not_found")
+                raise HTTPException(status_code=401, detail="Invalid API key")
+
+            # Check if key is active
+            if not api_key.is_active:
+                logger.warning(
+                    f"get_current_user_error: reason=api_key_inactive, key_prefix={api_key.key_prefix}"
+                )
+                raise HTTPException(status_code=401, detail="API key is inactive")
+
+            # Check if key has expired
+            if api_key.expires_at:
+                now = datetime.now(timezone.utc)
+                if api_key.expires_at < now:
+                    logger.warning(
+                        f"get_current_user_error: reason=api_key_expired, "
+                        f"key_prefix={api_key.key_prefix}, expired_at={api_key.expires_at.isoformat()}"
+                    )
+                    raise HTTPException(status_code=401, detail="API key has expired")
+
+            # Look up user
+            user_stmt = select(UserORM).where(UserORM.id == api_key.user_id)
+            user_result = await session.execute(user_stmt)
+            user = user_result.scalar_one_or_none()
 
             if not user:
                 logger.warning(
-                    f"get_current_user_error: reason=user_not_found, user_id={payload.sub}"
+                    f"get_current_user_error: reason=user_not_found_for_api_key, user_id={api_key.user_id}"
                 )
                 raise HTTPException(status_code=401, detail="User not found")
 
             if not user.is_active:
-                logger.warning(f"get_current_user_error: reason=user_inactive, user_id={user.id}")
+                logger.warning(
+                    f"get_current_user_error: reason=user_inactive, user_id={user.id}, "
+                    f"key_prefix={api_key.key_prefix}"
+                )
                 raise HTTPException(status_code=401, detail="User account is inactive")
 
+            # Update last_used_at (fire and forget - don't await)
+            # This is a common pattern for API key tracking
+            api_key.last_used_at = datetime.now(timezone.utc)
+            session.add(api_key)
+
             logger.info(
-                f"get_current_user_success: auth_type=bearer, user_id={user.id}, "
-                f"team_id={payload.team_id}, role={payload.role}"
+                f"get_current_user_success: auth_type=apikey, user_id={user.id}, "
+                f"team_id={api_key.team_id}, key_prefix={api_key.key_prefix}"
             )
-            return user, payload.team_id
+            return user, api_key.team_id
 
-        except ValueError as e:
-            # decode_token raises ValueError for invalid/expired tokens
-            logger.warning(f"get_current_user_error: reason=jwt_decode_failed, error={str(e)}")
-            raise HTTPException(status_code=401, detail=str(e)) from e
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception(f"get_current_user_error: reason=unexpected_jwt_error, error={str(e)}")
-            raise HTTPException(status_code=401, detail="Authentication failed") from e
-
-    # Route 2: API Key
-    elif auth_type.lower() == "apikey":
-        # Validate format first (cheap check)
-        if not validate_api_key_format(credential):
-            logger.warning("get_current_user_error: reason=invalid_api_key_format")
-            raise HTTPException(status_code=401, detail="Invalid API key format")
-
-        # Hash key for lookup
-        key_hash = hash_api_key(credential)
-
-        # Look up API key in database
-        api_key_stmt = select(ApiKeyORM).where(ApiKeyORM.key_hash == key_hash)
-        api_key_result = await session.execute(api_key_stmt)
-        api_key = api_key_result.scalar_one_or_none()
-
-        if not api_key:
-            logger.warning("get_current_user_error: reason=api_key_not_found")
-            raise HTTPException(status_code=401, detail="Invalid API key")
-
-        # Check if key is active
-        if not api_key.is_active:
-            logger.warning(
-                f"get_current_user_error: reason=api_key_inactive, key_prefix={api_key.key_prefix}"
+        else:
+            logger.warning(f"get_current_user_error: reason=unsupported_auth_type, type={auth_type}")
+            raise HTTPException(
+                status_code=401,
+                detail="Unsupported authorization type (use 'Bearer' or 'ApiKey')",
             )
-            raise HTTPException(status_code=401, detail="API key is inactive")
 
-        # Check if key has expired
-        if api_key.expires_at:
-            now = datetime.now(timezone.utc)
-            if api_key.expires_at < now:
-                logger.warning(
-                    f"get_current_user_error: reason=api_key_expired, "
-                    f"key_prefix={api_key.key_prefix}, expired_at={api_key.expires_at.isoformat()}"
-                )
-                raise HTTPException(status_code=401, detail="API key has expired")
-
-        # Look up user
-        user_stmt = select(UserORM).where(UserORM.id == api_key.user_id)
-        user_result = await session.execute(user_stmt)
-        user = user_result.scalar_one_or_none()
-
-        if not user:
-            logger.warning(
-                f"get_current_user_error: reason=user_not_found_for_api_key, user_id={api_key.user_id}"
-            )
-            raise HTTPException(status_code=401, detail="User not found")
-
-        if not user.is_active:
-            logger.warning(
-                f"get_current_user_error: reason=user_inactive, user_id={user.id}, "
-                f"key_prefix={api_key.key_prefix}"
-            )
-            raise HTTPException(status_code=401, detail="User account is inactive")
-
-        # Update last_used_at (fire and forget - don't await)
-        # This is a common pattern for API key tracking
-        api_key.last_used_at = datetime.now(timezone.utc)
-        session.add(api_key)
-
-        logger.info(
-            f"get_current_user_success: auth_type=apikey, user_id={user.id}, "
-            f"team_id={api_key.team_id}, key_prefix={api_key.key_prefix}"
-        )
-        return user, api_key.team_id
-
-    else:
-        logger.warning(f"get_current_user_error: reason=unsupported_auth_type, type={auth_type}")
-        raise HTTPException(
-            status_code=401,
-            detail="Unsupported authorization type (use 'Bearer' or 'ApiKey')",
-        )
+    logger.error("get_current_user_error: reason=session_unavailable")
+    raise HTTPException(status_code=500, detail="Authentication failed due to session error")
 
 
 def require_role(required_role: str) -> Callable:

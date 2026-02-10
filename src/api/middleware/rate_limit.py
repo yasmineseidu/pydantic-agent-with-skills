@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from src.cache.rate_limiter import RateLimiter
+from src.auth.jwt import decode_token
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         Returns:
             Response with X-RateLimit headers (or 429 if limit exceeded).
         """
+        # Resolve limiter from app state if not provided at init
+        if self._rate_limiter is None:
+            self._rate_limiter = getattr(request.app.state, "rate_limiter", None)
+
         # Skip rate limiting if limiter not available
         if self._rate_limiter is None:
             logger.debug("rate_limit_skipped: reason=limiter_not_available")
@@ -74,10 +79,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             return response
 
-        # Get team_id from request state (set by auth middleware)
+        # Get team_id from request state (if set by upstream auth)
         team_id: Optional[UUID] = getattr(request.state, "team_id", None)
 
-        # For auth endpoints (no team_id yet), use IP-based rate limiting
+        # Attempt to derive team_id from JWT if available
+        if team_id is None:
+            auth_header = request.headers.get("authorization")
+            if auth_header:
+                parts = auth_header.split(" ", 1)
+                if len(parts) == 2 and parts[0].lower() == "bearer":
+                    try:
+                        payload = decode_token(parts[1])
+                        team_id = payload.team_id
+                        if team_id:
+                            request.state.team_id = team_id
+                    except Exception:
+                        team_id = None
+
+        # For auth endpoints or missing team_id, use IP-based rate limiting
         if team_id is None:
             # Use client IP as team_id for auth endpoints
             client_ip = request.client.host if request.client else "unknown"

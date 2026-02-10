@@ -13,7 +13,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import PartDeltaEvent, PartStartEvent, TextPartDelta
 from dotenv import load_dotenv
 
-from src.agent import skill_agent
+from src.agent import get_skill_agent
 from src.dependencies import AgentDependencies
 from src.settings import load_settings
 
@@ -237,7 +237,7 @@ async def main():
 
                 # Stream the interaction and get response (pass deps)
                 response_text, new_messages = await stream_agent_interaction(
-                    user_input, message_history, skill_agent, deps
+                    user_input, message_history, get_skill_agent(), deps
                 )
 
                 # Add new messages to history
