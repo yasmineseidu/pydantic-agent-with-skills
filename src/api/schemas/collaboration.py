@@ -6,7 +6,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from src.collaboration.models import CollaborationPattern, CollaborationStatus, ParticipantRole
+from src.collaboration.models import (
+    AgentMessageType,
+    CollaborationPattern,
+    CollaborationStatus,
+    ParticipantRole,
+)
 
 
 class CollaborationRouteRequest(BaseModel):
@@ -74,3 +79,32 @@ class CollaborationStatusUpdateRequest(BaseModel):
 
     status: CollaborationStatus
     final_result: Optional[str] = Field(default=None, max_length=5000)
+
+
+class TaskDelegateRequest(BaseModel):
+    """Request to delegate a task to another agent."""
+
+    conversation_id: UUID
+    created_by_agent_id: UUID
+    assigned_to_agent_id: UUID
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=5000)
+    priority: int = Field(default=5, ge=1, le=10)
+    parent_task_id: Optional[UUID] = None
+
+
+class TaskCancelRequest(BaseModel):
+    """Request to cancel a delegated task."""
+
+    reason: Optional[str] = Field(default=None, max_length=2000)
+
+
+class AgentMessageSendRequest(BaseModel):
+    """Request to send an agent-to-agent message."""
+
+    conversation_id: UUID
+    to_agent_id: UUID
+    message_type: AgentMessageType
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=10000)
+    metadata: dict[str, Any] = Field(default_factory=dict)

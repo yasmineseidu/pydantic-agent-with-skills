@@ -15,6 +15,7 @@ from src.api.schemas.auth import (
 )
 from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
 from src.api.schemas.collaboration import (
+    AgentMessageSendRequest,
     CollaborationParticipantsRequest,
     CollaborationRecommendRequest,
     CollaborationRouteRequest,
@@ -22,6 +23,8 @@ from src.api.schemas.collaboration import (
     CollaborationStatusUpdateRequest,
     HandoffRecordResponse,
     HandoffRequest,
+    TaskCancelRequest,
+    TaskDelegateRequest,
 )
 from src.api.schemas.common import (
     ErrorResponse,
@@ -81,6 +84,9 @@ __all__ = [
     "CollaborationSessionCreateRequest",
     "CollaborationParticipantsRequest",
     "CollaborationStatusUpdateRequest",
+    "TaskDelegateRequest",
+    "TaskCancelRequest",
+    "AgentMessageSendRequest",
     # Memories
     "MemoryCreateRequest",
     "MemoryResponse",
