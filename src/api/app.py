@@ -151,6 +151,7 @@ def create_app() -> FastAPI:
         agents_router,
         auth_router,
         chat_router,
+        collaboration_router,
         conversations_router,
         health_router,
         memories_router,
@@ -168,6 +169,7 @@ def create_app() -> FastAPI:
     app.include_router(teams_router, tags=["teams"])
     app.include_router(memories_router, tags=["memories"])
     app.include_router(conversations_router, tags=["conversations"])
+    app.include_router(collaboration_router, tags=["collaboration"])
 
     # Chat endpoint (path is /{agent_slug}/chat, needs /v1/agents prefix)
     app.include_router(chat_router, prefix="/v1/agents", tags=["chat"])

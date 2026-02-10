@@ -14,6 +14,15 @@ from src.api.schemas.auth import (
     UserMeResponse,
 )
 from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
+from src.api.schemas.collaboration import (
+    CollaborationParticipantsRequest,
+    CollaborationRecommendRequest,
+    CollaborationRouteRequest,
+    CollaborationSessionCreateRequest,
+    CollaborationStatusUpdateRequest,
+    HandoffRecordResponse,
+    HandoffRequest,
+)
 from src.api.schemas.common import (
     ErrorResponse,
     HealthResponse,
@@ -64,6 +73,14 @@ __all__ = [
     "ChatResponse",
     "ChatUsage",
     "StreamChunk",
+    # Collaboration
+    "CollaborationRouteRequest",
+    "CollaborationRecommendRequest",
+    "HandoffRequest",
+    "HandoffRecordResponse",
+    "CollaborationSessionCreateRequest",
+    "CollaborationParticipantsRequest",
+    "CollaborationStatusUpdateRequest",
     # Memories
     "MemoryCreateRequest",
     "MemoryResponse",
