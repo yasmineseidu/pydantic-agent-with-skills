@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+from datetime import datetime, timezone
 from uuid import UUID
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -9,7 +10,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from src.cache.rate_limiter import RateLimiter
+from src.auth.api_keys import hash_api_key, validate_api_key_format
 from src.auth.jwt import decode_token
+from src.db.engine import get_session
+from src.db.models.auth import ApiKeyORM
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +101,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     except Exception:
                         team_id = None
 
+        # Attempt to derive team_id from API key if available
+        if team_id is None:
+            auth_header = request.headers.get("authorization")
+            if auth_header:
+                parts = auth_header.split(" ", 1)
+                if len(parts) == 2 and parts[0].lower() == "apikey":
+                    api_key = parts[1].strip()
+                    if validate_api_key_format(api_key):
+                        engine = getattr(request.app.state, "engine", None)
+                        if engine is not None:
+                            async for session in get_session(engine):
+                                key_hash = hash_api_key(api_key)
+                                stmt = select(ApiKeyORM.team_id, ApiKeyORM.expires_at, ApiKeyORM.is_active).where(
+                                    ApiKeyORM.key_hash == key_hash
+                                )
+                                result = await session.execute(stmt)
+                                row = result.first()
+                                if row:
+                                    db_team_id, expires_at, is_active = row
+                                    if is_active:
+                                        if expires_at is None or expires_at >= datetime.now(timezone.utc):
+                                            team_id = db_team_id
+                                            request.state.team_id = team_id
+                                break
+
         # For auth endpoints or missing team_id, use IP-based rate limiting
         if team_id is None:
             # Use client IP as team_id for auth endpoints
@@ -136,8 +166,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return response
         else:
             # Rate limit exceeded - return 429
-            from datetime import datetime, timezone
-
             reset_timestamp = int(result.reset_at.timestamp())
             now_timestamp = int(datetime.now(timezone.utc).timestamp())
             retry_after_seconds = max(0, reset_timestamp - now_timestamp)

@@ -115,6 +115,9 @@ async def get_current_user(
                     logger.warning(f"get_current_user_error: reason=user_inactive, user_id={user.id}")
                     raise HTTPException(status_code=401, detail="User account is inactive")
 
+                if payload.team_id:
+                    request.state.team_id = payload.team_id
+
                 logger.info(
                     f"get_current_user_success: auth_type=bearer, user_id={user.id}, "
                     f"team_id={payload.team_id}, role={payload.role}"
@@ -191,6 +194,8 @@ async def get_current_user(
             # This is a common pattern for API key tracking
             api_key.last_used_at = datetime.now(timezone.utc)
             session.add(api_key)
+
+            request.state.team_id = api_key.team_id
 
             logger.info(
                 f"get_current_user_success: auth_type=apikey, user_id={user.id}, "
