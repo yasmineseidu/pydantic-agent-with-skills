@@ -121,3 +121,35 @@ class ApiKeyCreatedResponse(ApiKeyResponse):
     """
 
     full_key: str
+
+
+class LogoutRequest(BaseModel):
+    """Logout request to revoke refresh tokens.
+
+    Args:
+        refresh_token: Optional specific token to revoke. If None, revokes all active tokens for user.
+    """
+
+    refresh_token: Optional[str] = None
+
+
+class UserMeResponse(BaseModel):
+    """Current authenticated user details response.
+
+    Args:
+        id: User UUID
+        email: User email address
+        display_name: User display name (optional)
+        is_active: Whether user account is active
+        created_at: User creation timestamp
+        team_id: Current team context UUID (from JWT or API key)
+        role: User role in current team (owner/admin/member/viewer)
+    """
+
+    id: UUID
+    email: str
+    display_name: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    team_id: Optional[UUID] = None
+    role: Optional[str] = None

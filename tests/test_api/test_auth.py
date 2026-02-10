@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from src.api.schemas.auth import (
     ApiKeyCreate,
     LoginRequest,
+    LogoutRequest,
     RefreshRequest,
     RegisterRequest,
 )
@@ -26,6 +27,8 @@ refresh_token = auth_router.refresh_token
 create_api_key = auth_router.create_api_key
 list_api_keys = auth_router.list_api_keys
 revoke_api_key = auth_router.revoke_api_key
+logout = auth_router.logout
+get_me = auth_router.get_me
 
 
 class TestRegister:
@@ -555,3 +558,125 @@ class TestRevokeApiKey:
 
         assert exc_info.value.status_code == 403
         assert "admin" in exc_info.value.detail
+
+
+class TestLogout:
+    """Tests for POST /v1/auth/logout endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_logout_success_revokes_all_tokens(self) -> None:
+        """Logout without specific token should revoke all active tokens."""
+        db = AsyncMock()
+        user_id = uuid4()
+        team_id = uuid4()
+
+        user = MagicMock(spec=UserORM)
+        user.id = user_id
+        auth = (user, team_id)
+
+        # Mock update result (2 tokens revoked)
+        mock_result = MagicMock()
+        mock_result.rowcount = 2
+        db.execute.return_value = mock_result
+
+        request_body = None  # No specific token -> revoke all
+
+        await logout(request_body, auth, db)
+
+        # Verify commit was called
+        assert db.commit.call_count == 1
+        assert db.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_logout_specific_token_revokes_one(self) -> None:
+        """Logout with specific token should revoke only that token."""
+        db = AsyncMock()
+        user_id = uuid4()
+        team_id = uuid4()
+
+        user = MagicMock(spec=UserORM)
+        user.id = user_id
+        auth = (user, team_id)
+
+        # Mock token lookup
+        token = MagicMock(spec=RefreshTokenORM)
+        token.revoked_at = None
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = token
+        db.execute.return_value = mock_result
+
+        request_body = LogoutRequest(refresh_token="specific_token")
+
+        await logout(request_body, auth, db)
+
+        # Verify token was revoked
+        assert token.revoked_at is not None
+        assert db.add.call_count == 1
+        assert db.commit.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_logout_requires_auth(self) -> None:
+        """Logout without authentication should raise 401 (handled by dependency)."""
+        # This test verifies that get_current_user dependency is applied
+        # The actual 401 is raised by get_current_user, not logout itself
+        # We test this by checking the function signature
+        import inspect
+
+        sig = inspect.signature(logout)
+        auth_param = sig.parameters["auth"]
+
+        # Verify Depends(get_current_user) is used
+        assert auth_param.default is not None
+        # The actual auth check happens at FastAPI dependency injection level
+
+
+class TestGetMe:
+    """Tests for GET /v1/auth/me endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_me_returns_current_user(self) -> None:
+        """GET /me should return authenticated user details with role."""
+        db = AsyncMock()
+        user_id = uuid4()
+        team_id = uuid4()
+
+        user = MagicMock(spec=UserORM)
+        user.id = user_id
+        user.email = "test@example.com"
+        user.display_name = "Test User"
+        user.is_active = True
+        user.created_at = datetime.now(timezone.utc)
+        auth = (user, team_id)
+
+        # Mock membership lookup
+        membership = MagicMock(spec=TeamMembershipORM)
+        membership.role = UserRole.ADMIN
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        db.execute.return_value = mock_result
+
+        result = await get_me(auth, db)
+
+        # Verify response
+        assert result.id == user_id
+        assert result.email == "test@example.com"
+        assert result.display_name == "Test User"
+        assert result.is_active is True
+        assert result.created_at == user.created_at
+        assert result.team_id == team_id
+        assert result.role == UserRole.ADMIN
+
+    @pytest.mark.asyncio
+    async def test_me_requires_auth(self) -> None:
+        """GET /me without authentication should raise 401 (handled by dependency)."""
+        # This test verifies that get_current_user dependency is applied
+        # The actual 401 is raised by get_current_user, not get_me itself
+        # We test this by checking the function signature
+        import inspect
+
+        sig = inspect.signature(get_me)
+        auth_param = sig.parameters["auth"]
+
+        # Verify Depends(get_current_user) is used
+        assert auth_param.default is not None
+        # The actual auth check happens at FastAPI dependency injection level

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routers.health import health_check, readiness_check
+from src.api.schemas.common import HealthResponse
 from src.cache.client import RedisManager
 
 
@@ -17,14 +18,17 @@ class TestHealthCheck:
         """health_check should always return status ok."""
         result = await health_check()
 
-        assert result == {"status": "ok"}
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
+        assert result.version == "0.1.0"
 
     @pytest.mark.asyncio
     async def test_health_check_no_dependencies(self) -> None:
         """health_check should not require any dependencies."""
         # This test verifies the function signature
         result = await health_check()
-        assert "status" in result
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
 
 
 class TestReadinessCheck:
@@ -45,9 +49,10 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=mock_redis)
 
-        assert result["status"] == "ok"
-        assert result["database"] == "connected"
-        assert result["redis"] == "connected"
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
+        assert result.services["database"].status == "connected"
+        assert result.services["redis"].status == "connected"
 
     @pytest.mark.asyncio
     async def test_readiness_check_no_redis(self) -> None:
@@ -58,9 +63,10 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=None)
 
-        assert result["status"] == "ok"
-        assert result["database"] == "connected"
-        assert "redis" not in result
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
+        assert result.services["database"].status == "connected"
+        assert "redis" not in result.services
 
     @pytest.mark.asyncio
     async def test_readiness_check_redis_unavailable(self) -> None:
@@ -75,9 +81,10 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=mock_redis)
 
-        assert result["status"] == "ok"
-        assert result["database"] == "connected"
-        assert result["redis"] == "unavailable"
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
+        assert result.services["database"].status == "connected"
+        assert result.services["redis"].status == "unavailable"
 
     @pytest.mark.asyncio
     async def test_readiness_check_redis_ping_fails(self) -> None:
@@ -94,9 +101,10 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=mock_redis)
 
-        assert result["status"] == "ok"
-        assert result["database"] == "connected"
-        assert result["redis"] == "unavailable"
+        assert isinstance(result, HealthResponse)
+        assert result.status == "ok"
+        assert result.services["database"].status == "connected"
+        assert result.services["redis"].status == "unavailable"
 
     @pytest.mark.asyncio
     async def test_readiness_check_database_error_raises_503(self) -> None:
@@ -133,11 +141,10 @@ class TestReadinessCheck:
         result = await readiness_check(db=mock_db, redis_manager=None)
 
         # Check required fields
-        assert isinstance(result, dict)
-        assert "status" in result
-        assert "database" in result
-        assert result["status"] in ["ok", "error"]
-        assert result["database"] in ["connected", "error"]
+        assert isinstance(result, HealthResponse)
+        assert result.status in ["ok", "error"]
+        assert "database" in result.services
+        assert result.services["database"].status in ["connected", "error"]
 
     @pytest.mark.asyncio
     async def test_readiness_check_executes_select_1(self) -> None:
@@ -170,9 +177,10 @@ class TestReadinessCheck:
         result = await readiness_check(db=mock_db, redis_manager=mock_redis)
 
         # Both should be connected
-        assert result["database"] == "connected"
-        assert result["redis"] == "connected"
-        assert result["status"] == "ok"
+        assert isinstance(result, HealthResponse)
+        assert result.services["database"].status == "connected"
+        assert result.services["redis"].status == "connected"
+        assert result.status == "ok"
 
     @pytest.mark.asyncio
     async def test_readiness_check_database_connection_error(self) -> None:
@@ -181,9 +189,7 @@ class TestReadinessCheck:
 
         # Mock database session with connection error
         mock_db = AsyncMock(spec=AsyncSession)
-        mock_db.execute = AsyncMock(
-            side_effect=ConnectionError("Failed to connect to database")
-        )
+        mock_db.execute = AsyncMock(side_effect=ConnectionError("Failed to connect to database"))
 
         with pytest.raises(HTTPException) as exc_info:
             await readiness_check(db=mock_db, redis_manager=None)
@@ -199,8 +205,9 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=None)
 
-        assert isinstance(result["status"], str)
-        assert isinstance(result["database"], str)
+        assert isinstance(result, HealthResponse)
+        assert isinstance(result.status, str)
+        assert isinstance(result.services["database"].status, str)
 
     @pytest.mark.asyncio
     async def test_readiness_check_redis_client_none_is_unavailable(self) -> None:
@@ -215,5 +222,6 @@ class TestReadinessCheck:
 
         result = await readiness_check(db=mock_db, redis_manager=mock_redis)
 
-        assert result["redis"] == "unavailable"
-        assert result["status"] == "ok"  # But readiness still passes
+        assert isinstance(result, HealthResponse)
+        assert result.services["redis"].status == "unavailable"
+        assert result.status == "ok"  # But readiness still passes

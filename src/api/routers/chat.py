@@ -4,16 +4,18 @@ import asyncio
 import logging
 import uuid as uuid_mod
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, AsyncIterator, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic_ai.messages import PartDeltaEvent, PartStartEvent, TextPartDelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
-from src.agent import create_skill_agent, skill_agent
+from src.agent import Agent, create_skill_agent, skill_agent
 from src.api.dependencies import get_agent_deps, get_db, get_settings
-from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage
+from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
 from src.auth.dependencies import get_current_user
 from src.db.models.agent import AgentORM, AgentStatusEnum
 from src.db.models.conversation import (
@@ -522,6 +524,368 @@ async def chat(
     )
 
     return chat_response
+
+
+@router.post(
+    "/{agent_slug}/chat/stream",
+    status_code=status.HTTP_200_OK,
+    summary="Stream a message to an agent via Server-Sent Events",
+    responses={
+        404: {"description": "Agent not found"},
+        401: {"description": "Not authenticated"},
+        422: {"description": "Validation error"},
+    },
+)
+async def stream_chat(
+    agent_slug: str,
+    body: ChatRequest,
+    current_user: tuple[UserORM, Optional[UUID]] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    agent_deps: AgentDependencies = Depends(get_agent_deps),
+) -> StreamingResponse:
+    """Stream agent response via Server-Sent Events.
+
+    Implements the same 8-step flow as the non-streaming chat endpoint,
+    but streams the response incrementally as text deltas.
+
+    SSE Event types:
+    - {"type": "content", "content": "...", "conversation_id": "..."} - First chunk with text delta
+    - {"type": "content", "content": "..."} - Subsequent text deltas
+    - {"type": "usage", "usage": {...}} - Token usage after completion
+    - {"type": "done"} - Marks end of stream
+    - {"type": "error", "content": "..."} - Error message
+
+    Args:
+        agent_slug: URL slug of the target agent.
+        body: Chat request containing message and optional conversation_id.
+        current_user: Authenticated user tuple (UserORM, team_id).
+        db: Async database session.
+        settings: Application settings.
+        agent_deps: Initialized agent dependencies.
+
+    Returns:
+        StreamingResponse with media_type="text/event-stream".
+
+    Raises:
+        HTTPException: 401 if not authenticated or no team context.
+        HTTPException: 404 if agent or conversation not found.
+        HTTPException: 400 if conversation does not belong to team.
+    """
+    request_id: str = str(uuid_mod.uuid4())
+    user, team_id = current_user
+
+    if not team_id:
+        logger.warning(
+            "stream_chat_error: request_id=%s, reason=no_team_context, user_id=%s",
+            request_id,
+            user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Team context required for chat",
+        )
+
+    logger.info(
+        "stream_chat_start: request_id=%s, agent_slug=%s, team_id=%s, user_id=%s",
+        request_id,
+        agent_slug,
+        team_id,
+        user.id,
+    )
+
+    async def event_generator() -> AsyncIterator[str]:
+        """Generate Server-Sent Events for streaming response."""
+        try:
+            # ---------------------------------------------------------------
+            # Step 1: Resolve agent by slug + team_id
+            # ---------------------------------------------------------------
+            stmt = select(AgentORM).where(
+                AgentORM.slug == agent_slug,
+                AgentORM.team_id == team_id,
+            )
+            result = await db.execute(stmt)
+            agent_orm: Optional[AgentORM] = result.scalar_one_or_none()
+
+            if agent_orm is None:
+                logger.warning(
+                    "stream_chat_agent_not_found: request_id=%s, slug=%s, team_id=%s",
+                    request_id,
+                    agent_slug,
+                    team_id,
+                )
+                chunk = StreamChunk(type="error", content=f"Agent '{agent_slug}' not found")
+                yield f"data: {chunk.model_dump_json()}\n\n"
+                return
+
+            if agent_orm.status != AgentStatusEnum.ACTIVE.value:
+                logger.warning(
+                    "stream_chat_agent_not_active: request_id=%s, agent_id=%s, status=%s",
+                    request_id,
+                    agent_orm.id,
+                    agent_orm.status,
+                )
+                chunk = StreamChunk(type="error", content=f"Agent '{agent_slug}' is not active")
+                yield f"data: {chunk.model_dump_json()}\n\n"
+                return
+
+            # ---------------------------------------------------------------
+            # Step 2: Load or create conversation
+            # ---------------------------------------------------------------
+            conversation: ConversationORM
+            is_new_conversation: bool = False
+
+            if body.conversation_id:
+                # Load existing conversation
+                conv_stmt = select(ConversationORM).where(
+                    ConversationORM.id == body.conversation_id,
+                )
+                conv_result = await db.execute(conv_stmt)
+                existing_conv: Optional[ConversationORM] = conv_result.scalar_one_or_none()
+
+                if existing_conv is None:
+                    logger.warning(
+                        "stream_chat_conversation_not_found: request_id=%s, conversation_id=%s",
+                        request_id,
+                        body.conversation_id,
+                    )
+                    chunk = StreamChunk(type="error", content="Conversation not found")
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    return
+
+                # Verify conversation belongs to the same team
+                if existing_conv.team_id != team_id:
+                    logger.warning(
+                        "stream_chat_conversation_wrong_team: request_id=%s, "
+                        "conversation_id=%s, conv_team=%s, user_team=%s",
+                        request_id,
+                        body.conversation_id,
+                        existing_conv.team_id,
+                        team_id,
+                    )
+                    chunk = StreamChunk(type="error", content="Conversation not found")
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    return
+
+                conversation = existing_conv
+            else:
+                # Create new conversation
+                title: str = _generate_title(body.message)
+                conversation = ConversationORM(
+                    team_id=team_id,
+                    agent_id=agent_orm.id,
+                    user_id=user.id,
+                    title=title,
+                    status=ConversationStatusEnum.ACTIVE.value,
+                    message_count=0,
+                    total_input_tokens=0,
+                    total_output_tokens=0,
+                )
+                db.add(conversation)
+                await db.flush()
+                await db.refresh(conversation)
+                is_new_conversation = True
+
+            # ---------------------------------------------------------------
+            # Step 3: Retrieve memories (graceful degradation)
+            # ---------------------------------------------------------------
+            if agent_deps.memory_retriever:
+                try:
+                    await agent_deps.memory_retriever.retrieve(
+                        query=body.message,
+                        team_id=team_id,
+                        agent_id=agent_orm.id,
+                        conversation_id=conversation.id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "stream_chat_memory_retrieval_failed: request_id=%s, error=%s",
+                        request_id,
+                        str(e),
+                    )
+
+            # ---------------------------------------------------------------
+            # Step 5: Create agent instance
+            # ---------------------------------------------------------------
+            agent_dna = _orm_to_agent_dna(agent_orm)
+            active_agent = skill_agent  # default fallback
+
+            if agent_dna is not None:
+                try:
+                    active_agent = create_skill_agent(agent_dna=agent_dna)
+                except Exception as e:
+                    logger.warning(
+                        "stream_chat_agent_creation_failed: request_id=%s, error=%s",
+                        request_id,
+                        str(e),
+                    )
+                    active_agent = skill_agent
+
+            # ---------------------------------------------------------------
+            # Step 6: Stream agent response using agent.iter()
+            # ---------------------------------------------------------------
+            response_text: str = ""
+            input_tokens: int = 0
+            output_tokens: int = 0
+            first_chunk: bool = True
+
+            async with active_agent.iter(body.message, deps=agent_deps) as run:
+                async for node in run:
+                    # Handle model request node - stream text deltas
+                    if Agent.is_model_request_node(node):
+                        async with node.stream(run.ctx) as request_stream:
+                            async for event in request_stream:
+                                # Handle text part start events
+                                if (
+                                    isinstance(event, PartStartEvent)
+                                    and event.part.part_kind == "text"
+                                ):
+                                    initial_text = event.part.content
+                                    if initial_text:
+                                        response_text += initial_text
+                                        if first_chunk:
+                                            chunk = StreamChunk(
+                                                type="content",
+                                                content=initial_text,
+                                                conversation_id=conversation.id,
+                                            )
+                                            first_chunk = False
+                                        else:
+                                            chunk = StreamChunk(
+                                                type="content",
+                                                content=initial_text,
+                                            )
+                                        yield f"data: {chunk.model_dump_json()}\n\n"
+
+                                # Handle text delta events for streaming
+                                elif isinstance(event, PartDeltaEvent) and isinstance(
+                                    event.delta, TextPartDelta
+                                ):
+                                    delta_text = event.delta.content_delta
+                                    if delta_text:
+                                        response_text += delta_text
+                                        if first_chunk:
+                                            chunk = StreamChunk(
+                                                type="content",
+                                                content=delta_text,
+                                                conversation_id=conversation.id,
+                                            )
+                                            first_chunk = False
+                                        else:
+                                            chunk = StreamChunk(
+                                                type="content",
+                                                content=delta_text,
+                                            )
+                                        yield f"data: {chunk.model_dump_json()}\n\n"
+
+            # Get usage from run
+            usage = run.usage()
+            input_tokens = usage.input_tokens
+            output_tokens = usage.output_tokens
+
+            # ---------------------------------------------------------------
+            # Step 7: Persist messages and update conversation counters
+            # ---------------------------------------------------------------
+            now: datetime = datetime.now(timezone.utc)
+            model_name: str = settings.llm_model
+            if agent_dna is not None:
+                model_name = agent_dna.model.model_name
+
+            # User message
+            user_message = MessageORM(
+                conversation_id=conversation.id,
+                agent_id=None,
+                role=MessageRoleEnum.USER.value,
+                content=body.message,
+                token_count=input_tokens,
+                model=None,
+            )
+            db.add(user_message)
+
+            # Assistant message
+            assistant_message = MessageORM(
+                conversation_id=conversation.id,
+                agent_id=agent_orm.id,
+                role=MessageRoleEnum.ASSISTANT.value,
+                content=response_text,
+                token_count=output_tokens,
+                model=model_name,
+            )
+            db.add(assistant_message)
+
+            # Update conversation counters
+            conversation.message_count += 2
+            conversation.total_input_tokens += input_tokens
+            conversation.total_output_tokens += output_tokens
+            conversation.last_message_at = now
+            db.add(conversation)
+
+            await db.flush()
+            await db.refresh(user_message)
+            await db.refresh(assistant_message)
+            await db.commit()
+
+            # Send usage chunk
+            usage_chunk = StreamChunk(
+                type="usage",
+                usage=ChatUsage(
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    model=model_name,
+                ),
+            )
+            yield f"data: {usage_chunk.model_dump_json()}\n\n"
+
+            # Send done chunk
+            done_chunk = StreamChunk(type="done")
+            yield f"data: {done_chunk.model_dump_json()}\n\n"
+
+            # ---------------------------------------------------------------
+            # Step 8: Trigger async memory extraction (fire and forget)
+            # ---------------------------------------------------------------
+            if agent_deps.memory_extractor:
+                try:
+                    messages_for_extraction: list[dict[str, str]] = [
+                        {"role": "user", "content": body.message},
+                        {"role": "assistant", "content": response_text},
+                    ]
+
+                    asyncio.create_task(
+                        _extract_memories(
+                            extractor=agent_deps.memory_extractor,
+                            messages=messages_for_extraction,
+                            team_id=team_id,
+                            agent_id=agent_orm.id,
+                            user_id=user.id,
+                            conversation_id=conversation.id,
+                            request_id=request_id,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "stream_chat_extraction_trigger_failed: request_id=%s, error=%s",
+                        request_id,
+                        str(e),
+                    )
+
+            logger.info(
+                "stream_chat_complete: request_id=%s, conversation_id=%s, is_new=%s, total_tokens=%d",
+                request_id,
+                conversation.id,
+                is_new_conversation,
+                input_tokens + output_tokens,
+            )
+
+        except Exception as e:
+            logger.exception(
+                "stream_chat_error: request_id=%s, error=%s",
+                request_id,
+                str(e),
+            )
+            error_chunk = StreamChunk(type="error", content=f"Stream failed: {str(e)}")
+            yield f"data: {error_chunk.model_dump_json()}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 async def _extract_memories(

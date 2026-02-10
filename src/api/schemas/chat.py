@@ -50,3 +50,19 @@ class ChatResponse(BaseModel):
     message_id: UUID
     usage: ChatUsage
     request_id: str
+
+
+class StreamChunk(BaseModel):
+    """Server-Sent Events stream chunk for chat streaming.
+
+    Args:
+        type: Chunk type - "content" (text delta), "usage" (token stats), "done" (completion), "error"
+        content: Text content for content chunks, error message for error chunks
+        conversation_id: Conversation ID (sent in first chunk only)
+        usage: Token usage statistics (sent in usage chunk only)
+    """
+
+    type: str  # "content", "usage", "done", "error"
+    content: str = ""
+    conversation_id: Optional[UUID] = None
+    usage: Optional[ChatUsage] = None

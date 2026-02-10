@@ -7,12 +7,20 @@ from src.api.schemas.auth import (
     ApiKeyResponse,
     LoginRequest,
     LoginResponse,
+    LogoutRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
+    UserMeResponse,
 )
-from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage
-from src.api.schemas.common import ErrorResponse, PaginatedResponse, SuccessResponse
+from src.api.schemas.chat import ChatRequest, ChatResponse, ChatUsage, StreamChunk
+from src.api.schemas.common import (
+    ErrorResponse,
+    HealthResponse,
+    PaginatedResponse,
+    ServiceStatus,
+    SuccessResponse,
+)
 from src.api.schemas.conversations import ConversationResponse, MessageResponse
 from src.api.schemas.memories import (
     MemoryCreateRequest,
@@ -34,15 +42,19 @@ __all__ = [
     "ErrorResponse",
     "SuccessResponse",
     "PaginatedResponse",
+    "ServiceStatus",
+    "HealthResponse",
     # Auth
     "RegisterRequest",
     "LoginRequest",
     "LoginResponse",
+    "LogoutRequest",
     "TokenPair",
     "RefreshRequest",
     "ApiKeyCreate",
     "ApiKeyResponse",
     "ApiKeyCreatedResponse",
+    "UserMeResponse",
     # Agents
     "AgentCreate",
     "AgentUpdate",
@@ -51,6 +63,7 @@ __all__ = [
     "ChatRequest",
     "ChatResponse",
     "ChatUsage",
+    "StreamChunk",
     # Memories
     "MemoryCreateRequest",
     "MemoryResponse",

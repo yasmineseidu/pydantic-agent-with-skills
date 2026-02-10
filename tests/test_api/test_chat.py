@@ -19,6 +19,7 @@ from src.dependencies import AgentDependencies
 
 # Extract functions from module
 chat = chat_module.chat
+stream_chat = chat_module.stream_chat
 _generate_title = chat_module._generate_title
 _orm_to_agent_dna = chat_module._orm_to_agent_dna
 
@@ -64,7 +65,9 @@ class TestGenerateTitle:
 
     def test_generate_title_long_message_with_period(self) -> None:
         """Long messages should truncate at first sentence boundary."""
-        message = "This is a very long message that goes on and on. But this part should not appear."
+        message = (
+            "This is a very long message that goes on and on. But this part should not appear."
+        )
         result = _generate_title(message)
         assert result == "This is a very long message that goes on and on."
         assert len(result) <= 80
@@ -498,9 +501,7 @@ class TestChatMemoryRetrieval:
     """Tests for Step 3: Retrieve memories (graceful degradation)."""
 
     @pytest.mark.asyncio
-    async def test_chat_with_memory_retrieval(
-        self, test_user: UserORM, test_team_id: UUID
-    ) -> None:
+    async def test_chat_with_memory_retrieval(self, test_user: UserORM, test_team_id: UUID) -> None:
         """Chat should retrieve memories when retriever is available."""
         # Setup mock database
         db_session, _, _, _ = setup_mock_db_session()
@@ -689,9 +690,7 @@ class TestChatAgentExecution:
     """Tests for Steps 5-6: Create agent instance and run."""
 
     @pytest.mark.asyncio
-    async def test_chat_successful_agent_run(
-        self, test_user: UserORM, test_team_id: UUID
-    ) -> None:
+    async def test_chat_successful_agent_run(self, test_user: UserORM, test_team_id: UUID) -> None:
         """Successful agent run should return proper ChatResponse."""
         # Setup mock database
         db_session, _, _, _ = setup_mock_db_session()
@@ -784,9 +783,7 @@ class TestChatAgentExecution:
         mock_agent_deps.memory_extractor = None
 
         with patch("src.api.routers.chat.skill_agent") as mock_skill_agent:
-            mock_skill_agent.run = AsyncMock(
-                side_effect=Exception("LLM provider API key invalid")
-            )
+            mock_skill_agent.run = AsyncMock(side_effect=Exception("LLM provider API key invalid"))
 
             with pytest.raises(HTTPException) as exc_info:
                 await chat(
@@ -806,9 +803,7 @@ class TestChatAuthentication:
     """Tests for authentication and authorization."""
 
     @pytest.mark.asyncio
-    async def test_chat_requires_team_context(
-        self, test_user: UserORM
-    ) -> None:
+    async def test_chat_requires_team_context(self, test_user: UserORM) -> None:
         """Chat without team context should raise 401."""
         # Setup mock database (even though chat will fail before using it)
         db_session, _, _, _ = setup_mock_db_session()
@@ -962,3 +957,126 @@ class TestChatResponseStructure:
         assert result.usage.input_tokens == 250
         assert result.usage.output_tokens == 125
         assert result.usage.model == "anthropic/claude-opus-4.6"
+
+
+class TestStreamChat:
+    """Tests for streaming chat endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_stream_returns_event_stream_content_type(
+        self, test_user: UserORM, test_team_id: UUID
+    ) -> None:
+        """Stream endpoint should return text/event-stream content type."""
+        # Setup mock database
+        db_session, _, _, _ = setup_mock_db_session()
+
+        # Setup basic mocks
+        mock_agent = MagicMock(spec=AgentORM)
+        mock_agent.id = uuid4()
+        mock_agent.team_id = test_team_id
+        mock_agent.status = AgentStatusEnum.ACTIVE.value
+        mock_agent.name = "Test Agent"
+        mock_agent.slug = "test-agent"
+        mock_agent.personality = None
+        mock_agent.model_config_json = None
+
+        mock_agent_result = AsyncMock()
+        mock_agent_result.scalar_one_or_none = MagicMock(return_value=mock_agent)
+        db_session.execute = AsyncMock(return_value=mock_agent_result)
+
+        body = ChatRequest(message="Hello")
+        current_user = (test_user, test_team_id)
+
+        mock_settings = MagicMock()
+        mock_settings.llm_model = "anthropic/claude-sonnet-4.5"
+
+        mock_agent_deps = MagicMock(spec=AgentDependencies)
+        mock_agent_deps.memory_retriever = None
+        mock_agent_deps.memory_extractor = None
+
+        # Mock agent.iter() streaming
+        mock_run = MagicMock()
+        mock_run.usage = MagicMock(return_value=MagicMock(input_tokens=100, output_tokens=50))
+        mock_run.__aenter__ = AsyncMock(return_value=mock_run)
+        mock_run.__aexit__ = AsyncMock(return_value=None)
+        mock_run.__aiter__ = MagicMock(return_value=AsyncMock().__aiter__())
+
+        with patch("src.api.routers.chat.skill_agent") as mock_skill_agent:
+            mock_skill_agent.iter = MagicMock(return_value=mock_run)
+
+            result = await chat_module.stream_chat(
+                agent_slug="test-agent",
+                body=body,
+                current_user=current_user,
+                db=db_session,
+                settings=mock_settings,
+                agent_deps=mock_agent_deps,
+            )
+
+        # Verify response type
+        assert result.media_type == "text/event-stream"
+
+    @pytest.mark.asyncio
+    async def test_stream_requires_auth(self, test_user: UserORM) -> None:
+        """Stream endpoint should require team context."""
+        db_session, _, _, _ = setup_mock_db_session()
+
+        body = ChatRequest(message="Hello")
+        current_user = (test_user, None)  # No team_id
+
+        mock_settings = MagicMock()
+        mock_agent_deps = MagicMock(spec=AgentDependencies)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await chat_module.stream_chat(
+                agent_slug="test-agent",
+                body=body,
+                current_user=current_user,
+                db=db_session,
+                settings=mock_settings,
+                agent_deps=mock_agent_deps,
+            )
+
+        assert exc_info.value.status_code == 401
+        assert "team context required" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_stream_agent_not_found(self, test_user: UserORM, test_team_id: UUID) -> None:
+        """Stream endpoint should handle agent not found."""
+        # Setup mock database
+        db_session, _, _, _ = setup_mock_db_session()
+
+        # Mock database query returning None
+        mock_result = AsyncMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        db_session.execute = AsyncMock(return_value=mock_result)
+
+        body = ChatRequest(message="Hello")
+        current_user = (test_user, test_team_id)
+
+        mock_settings = MagicMock()
+        mock_agent_deps = MagicMock(spec=AgentDependencies)
+
+        result = await chat_module.stream_chat(
+            agent_slug="nonexistent",
+            body=body,
+            current_user=current_user,
+            db=db_session,
+            settings=mock_settings,
+            agent_deps=mock_agent_deps,
+        )
+
+        # Verify it returns StreamingResponse with error in SSE format
+        assert result.media_type == "text/event-stream"
+        # Consume the stream to check for error chunk
+        chunks = []
+        async for chunk in result.body_iterator:
+            # StreamingResponse yields strings, not bytes
+            if isinstance(chunk, bytes):
+                chunks.append(chunk.decode("utf-8"))
+            else:
+                chunks.append(chunk)
+
+        # Should have at least one error chunk
+        assert len(chunks) > 0
+        assert "error" in chunks[0].lower()

@@ -51,3 +51,31 @@ class PaginatedResponse(BaseModel, Generic[T]):
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
     has_more: bool
+
+
+class ServiceStatus(BaseModel):
+    """Service health status information.
+
+    Args:
+        status: Service status ("connected", "unavailable", "error")
+        latency_ms: Optional response latency in milliseconds
+        error: Optional error message if service is unhealthy
+    """
+
+    status: str
+    latency_ms: Optional[float] = None
+    error: Optional[str] = None
+
+
+class HealthResponse(BaseModel):
+    """Health check response with service status.
+
+    Args:
+        status: Overall health status ("ok", "degraded", "error")
+        version: Application version
+        services: Dictionary of service statuses (e.g., {"database": ServiceStatus})
+    """
+
+    status: str
+    version: str = "0.1.0"
+    services: dict[str, ServiceStatus] = Field(default_factory=dict)

@@ -1,13 +1,14 @@
 """Health check endpoints for liveness and readiness probes."""
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db, get_redis_manager
+from src.api.schemas.common import HealthResponse, ServiceStatus
 from src.cache.client import RedisManager
 
 logger = logging.getLogger(__name__)
@@ -15,8 +16,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/health")
-async def health_check() -> dict[str, str]:
+@router.get("/health", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
     """
     Liveness check endpoint (always returns 200 OK).
 
@@ -25,17 +26,17 @@ async def health_check() -> dict[str, str]:
     systems for basic liveness detection.
 
     Returns:
-        Dictionary with status "ok".
+        HealthResponse with status "ok".
     """
     logger.debug("health_check: status=ok")
-    return {"status": "ok"}
+    return HealthResponse(status="ok", version="0.1.0")
 
 
-@router.get("/ready")
+@router.get("/ready", response_model=HealthResponse)
 async def readiness_check(
     db: Optional[AsyncSession] = Depends(get_db),
     redis_manager: Optional[RedisManager] = Depends(get_redis_manager),
-) -> dict[str, Any]:
+) -> HealthResponse:
     """
     Readiness check endpoint with dependency health status.
 
@@ -48,18 +49,16 @@ async def readiness_check(
         redis_manager: Optional Redis manager from dependency injection.
 
     Returns:
-        Dictionary with status and dependency health:
-        - status: "ok" if ready, "error" if not ready
-        - database: "connected" or "error"
-        - redis: "connected", "unavailable", or not included if not configured
+        HealthResponse with status and service health information.
 
     Raises:
         HTTPException: 503 if database is unavailable.
     """
-    result: dict[str, Any] = {}
+    services: dict[str, ServiceStatus] = {}
 
     # Check database
     database_status = "error"
+    database_error: Optional[str] = None
     if db is not None:
         try:
             await db.execute(text("SELECT 1"))
@@ -68,14 +67,18 @@ async def readiness_check(
         except Exception as e:
             logger.warning(f"readiness_check: database=error, error={str(e)}")
             database_status = "error"
+            database_error = str(e)
     else:
         logger.warning("readiness_check: database=unavailable, reason=no_session")
         database_status = "error"
+        database_error = "No database session available"
 
-    result["database"] = database_status
+    services["database"] = ServiceStatus(status=database_status, error=database_error)
 
     # Check Redis (optional - unavailability is NOT an error)
     if redis_manager is not None:
+        redis_status = "unavailable"
+        redis_error: Optional[str] = None
         try:
             client = await redis_manager.get_client()
             if client is not None:
@@ -85,22 +88,22 @@ async def readiness_check(
                 logger.info("readiness_check: redis=connected")
             else:
                 redis_status = "unavailable"
+                redis_error = "Redis client not available"
                 logger.debug("readiness_check: redis=unavailable, reason=client_none")
         except Exception as e:
             logger.warning(f"readiness_check: redis=unavailable, error={str(e)}")
             redis_status = "unavailable"
+            redis_error = str(e)
 
-        result["redis"] = redis_status
+        services["redis"] = ServiceStatus(status=redis_status, error=redis_error)
 
     # Fail readiness if database is down
     if database_status == "error":
-        result["status"] = "error"
         logger.error("readiness_check: status=error, reason=database_down")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database service unavailable",
         )
 
-    result["status"] = "ok"
     logger.info("readiness_check: status=ok")
-    return result
+    return HealthResponse(status="ok", version="0.1.0", services=services)

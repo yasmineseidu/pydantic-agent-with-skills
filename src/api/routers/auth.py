@@ -7,7 +7,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_db, get_settings
@@ -17,9 +17,11 @@ from src.api.schemas.auth import (
     ApiKeyResponse,
     LoginRequest,
     LoginResponse,
+    LogoutRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
+    UserMeResponse,
 )
 from src.auth.api_keys import generate_api_key
 from src.auth.dependencies import get_current_user, require_role
@@ -518,4 +520,117 @@ async def revoke_api_key(
     logger.info(
         f"api_key_revoked: user_id={user.id}, team_id={team_id}, key_id={key_id}, "
         f"key_prefix={api_key.key_prefix}"
+    )
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    request_body: Optional[LogoutRequest] = None,
+    auth: tuple[UserORM, Optional[UUID]] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """
+    Logout by revoking refresh tokens.
+
+    Revokes either a specific refresh token (if provided) or all active refresh
+    tokens for the authenticated user. Access tokens are stateless JWT and cannot
+    be revoked, but will expire naturally (typically 15-60 minutes).
+
+    Args:
+        request_body: Optional logout request with specific refresh_token to revoke
+        auth: Authenticated user and team_id (from get_current_user dependency)
+        db: Async database session
+
+    Raises:
+        HTTPException: 401 if not authenticated (handled by get_current_user)
+
+    Returns:
+        None (204 No Content)
+    """
+    user, _ = auth
+    now = datetime.now(timezone.utc)
+
+    if request_body and request_body.refresh_token:
+        # Revoke specific token
+        token_hash = hashlib.sha256(request_body.refresh_token.encode("utf-8")).hexdigest()
+        token_stmt = select(RefreshTokenORM).where(
+            RefreshTokenORM.token_hash == token_hash,
+            RefreshTokenORM.user_id == user.id,
+            RefreshTokenORM.revoked_at.is_(None),
+        )
+        result = await db.execute(token_stmt)
+        token = result.scalar_one_or_none()
+        if token:
+            token.revoked_at = now
+            db.add(token)
+            logger.info(
+                f"logout_success: user_id={user.id}, token_hash_prefix={token_hash[:12]}, "
+                f"revoke_scope=specific"
+            )
+        else:
+            logger.warning(
+                f"logout_warning: user_id={user.id}, token_hash_prefix={token_hash[:12]}, "
+                f"reason=token_not_found_or_already_revoked"
+            )
+    else:
+        # Revoke all active tokens for user
+        revoke_stmt = (
+            update(RefreshTokenORM)
+            .where(
+                RefreshTokenORM.user_id == user.id,
+                RefreshTokenORM.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        await db.execute(revoke_stmt)
+        logger.info(f"logout_success: user_id={user.id}, revoke_scope=all")
+
+    await db.commit()
+
+
+@router.get("/me", response_model=UserMeResponse)
+async def get_me(
+    auth: tuple[UserORM, Optional[UUID]] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserMeResponse:
+    """
+    Get current authenticated user details.
+
+    Returns the authenticated user's profile information including their role
+    in the current team context (from JWT or API key).
+
+    Args:
+        auth: Authenticated user and team_id (from get_current_user dependency)
+        db: Async database session
+
+    Returns:
+        UserMeResponse with user profile and team context
+
+    Raises:
+        HTTPException: 401 if not authenticated (handled by get_current_user)
+    """
+    user, team_id = auth
+
+    # Get role in current team if team_id is available
+    role = None
+    if team_id:
+        membership_stmt = select(TeamMembershipORM).where(
+            TeamMembershipORM.user_id == user.id,
+            TeamMembershipORM.team_id == team_id,
+        )
+        result = await db.execute(membership_stmt)
+        membership = result.scalar_one_or_none()
+        if membership:
+            role = membership.role
+
+    logger.info(f"get_me_success: user_id={user.id}, team_id={team_id}, role={role}")
+
+    return UserMeResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        team_id=team_id,
+        role=role,
     )
