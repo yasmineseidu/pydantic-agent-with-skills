@@ -87,10 +87,11 @@ class ExpertGate:
         # Sort by overall score descending
         scored_agents.sort(key=lambda x: x[1].overall, reverse=True)
 
+        top_score = scored_agents[0][1].overall if scored_agents else 0.0
         logger.info(
             f"expert_gate_scored: team_id={team_id}, "
             f"agents_count={len(scored_agents)}, "
-            f"top_score={scored_agents[0][1].overall:.2f if scored_agents else 0.0}"
+            f"top_score={top_score:.2f}"
         )
 
         return scored_agents

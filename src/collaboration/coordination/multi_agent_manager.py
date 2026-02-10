@@ -153,7 +153,7 @@ class MultiAgentManager:
                 CollaborationParticipantInfo(
                     agent_id=agent_id,
                     role=role,
-                    joined_at=participant_orm.created_at,
+                    joined_at=participant_orm.created_at or datetime.utcnow(),
                     contribution="",
                 )
             )

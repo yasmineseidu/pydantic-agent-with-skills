@@ -1,5 +1,6 @@
 """Unit tests for collaboration routing and directory services."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -89,3 +90,34 @@ async def test_agent_router_suggest_collaboration_respects_feature_flag() -> Non
     result = await router.suggest_collaboration(query="analyze and review this", user_id=user_id)
 
     assert result == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_agent_directory_check_availability_uses_boundaries() -> None:
+    agent_orm = MagicMock()
+    agent_orm.id = uuid4()
+    agent_orm.status = "active"
+    agent_orm.boundaries = {"max_tool_calls_per_turn": 3}
+
+    directory = AgentDirectory(AsyncMock())
+    availability = await directory.check_availability(agent_orm, current_load=2)
+
+    assert availability.is_available is True
+    assert availability.max_concurrent_tasks == 3
+
+
+@pytest.mark.unit
+def test_agent_directory_filter_by_skills_matches_all() -> None:
+    agent_a = MagicMock()
+    agent_a.shared_skill_names = ["python", "sql"]
+    agent_a.custom_skill_names = ["backend"]
+
+    agent_b = MagicMock()
+    agent_b.shared_skill_names = ["python"]
+    agent_b.custom_skill_names = ["frontend"]
+
+    directory = AgentDirectory(AsyncMock())
+    filtered = asyncio.run(directory.filter_by_skills([agent_a, agent_b], ["python", "sql"]))
+
+    assert filtered == [agent_a]
