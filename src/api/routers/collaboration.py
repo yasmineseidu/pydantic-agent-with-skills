@@ -93,9 +93,7 @@ async def recommend_agents(
 ) -> list[AgentRecommendation]:
     """Recommend multiple agents for collaborative work."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     directory = AgentDirectory(db)
     agent_router = AgentRouter(directory, settings)
@@ -191,9 +189,7 @@ async def create_session(
 ) -> CollaborationSession:
     """Create a new collaboration session."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     manager = MultiAgentManager(db)
     session = await manager.create_collaboration(
@@ -229,9 +225,7 @@ async def add_participants(
 ) -> CollaborationSession:
     """Add participants to an existing collaboration session."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     manager = MultiAgentManager(db)
     participants = [(item.agent_id, item.role) for item in payload.participants]
@@ -241,7 +235,9 @@ async def add_participants(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.error(f"collaboration_participants_commit_failed: user_id={user.id}, error={str(exc)}")
+        logger.error(
+            f"collaboration_participants_commit_failed: user_id={user.id}, error={str(exc)}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to persist participants",
@@ -263,9 +259,7 @@ async def update_session_status(
 ) -> CollaborationSession:
     """Update collaboration session status."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     manager = MultiAgentManager(db)
     session = await manager.update_session_status(
@@ -296,13 +290,13 @@ async def get_session(
 ) -> CollaborationSession:
     """Get a collaboration session by ID."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     session_orm = await db.get(CollaborationSessionORM, session_id)
     if not session_orm:
-        logger.warning(f"collaboration_session_not_found: user_id={user.id}, session_id={session_id}")
+        logger.warning(
+            f"collaboration_session_not_found: user_id={user.id}, session_id={session_id}"
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     try:
@@ -343,9 +337,7 @@ async def delegate_task(
 ) -> AgentTask:
     """Delegate a task to another agent."""
     user, _team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_task_delegation, "enable_task_delegation"
-    )
+    _require_feature_flag(settings.feature_flags.enable_task_delegation, "enable_task_delegation")
 
     manager = DelegationManager(db)
     result = await manager.delegate_task(
@@ -383,9 +375,7 @@ async def get_task(
 ) -> AgentTask:
     """Get task status by task ID."""
     user, team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_task_delegation, "enable_task_delegation"
-    )
+    _require_feature_flag(settings.feature_flags.enable_task_delegation, "enable_task_delegation")
 
     stmt = (
         select(AgentTaskORM)
@@ -439,9 +429,7 @@ async def cancel_task(
 ) -> AgentTask:
     """Cancel a delegated task."""
     user, team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_task_delegation, "enable_task_delegation"
-    )
+    _require_feature_flag(settings.feature_flags.enable_task_delegation, "enable_task_delegation")
 
     stmt = (
         select(AgentTaskORM)
@@ -487,9 +475,7 @@ async def get_agent_inbox(
 ) -> list[AgentMessage]:
     """Get pending messages for an agent by slug."""
     user, team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     stmt = select(AgentORM).where(AgentORM.team_id == team_id, AgentORM.slug == slug)
     result = await db.execute(stmt)
@@ -512,9 +498,7 @@ async def send_agent_message(
 ) -> AgentMessage:
     """Send a message from the specified agent to another agent."""
     user, team_id = current_user
-    _require_feature_flag(
-        settings.feature_flags.enable_collaboration, "enable_collaboration"
-    )
+    _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
 
     stmt = select(AgentORM).where(AgentORM.team_id == team_id, AgentORM.slug == slug)
     result = await db.execute(stmt)

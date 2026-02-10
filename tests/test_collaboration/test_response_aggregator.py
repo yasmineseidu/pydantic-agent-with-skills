@@ -22,12 +22,12 @@ async def test_aggregate_responses_requires_feature_flag() -> None:
     with pytest.raises(ValueError):
         await aggregator.aggregate_responses(
             [
-        ExpertResponse(
-            expert_id=uuid4(),
-            expert_name="Analyst",
-            response="Output",
-            confidence=0.9,
-        )
+                ExpertResponse(
+                    expert_id=uuid4(),
+                    expert_name="Analyst",
+                    response="Output",
+                    confidence=0.9,
+                )
             ]
         )
 

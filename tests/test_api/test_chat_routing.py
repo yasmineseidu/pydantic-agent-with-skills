@@ -69,7 +69,9 @@ async def test_chat_routes_to_selected_agent() -> None:
 
     with (
         patch("src.api.routers.chat.skill_agent") as mock_skill_agent,
-        patch("src.api.routers.chat._route_to_agent", new=AsyncMock(return_value="routed-agent")) as mock_route,
+        patch(
+            "src.api.routers.chat._route_to_agent", new=AsyncMock(return_value="routed-agent")
+        ) as mock_route,
     ):
         mock_skill_agent.run = AsyncMock(return_value=mock_run_result)
 

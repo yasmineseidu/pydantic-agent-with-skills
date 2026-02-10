@@ -41,7 +41,10 @@ async def test_add_participants_returns_session() -> None:
 
     async def _flush():
         for obj in added:
-            if isinstance(obj, CollaborationParticipantV2ORM) and getattr(obj, "created_at", None) is None:
+            if (
+                isinstance(obj, CollaborationParticipantV2ORM)
+                and getattr(obj, "created_at", None) is None
+            ):
                 obj.created_at = datetime.now(timezone.utc)
 
     session.add = MagicMock(side_effect=_add)

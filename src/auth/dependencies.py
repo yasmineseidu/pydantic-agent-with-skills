@@ -109,7 +109,9 @@ async def get_current_user(
                     raise HTTPException(status_code=401, detail="User not found")
 
                 if not user.is_active:
-                    logger.warning(f"get_current_user_error: reason=user_inactive, user_id={user.id}")
+                    logger.warning(
+                        f"get_current_user_error: reason=user_inactive, user_id={user.id}"
+                    )
                     raise HTTPException(status_code=401, detail="User account is inactive")
 
                 if payload.team_id:
@@ -201,7 +203,9 @@ async def get_current_user(
             return user, api_key.team_id
 
         else:
-            logger.warning(f"get_current_user_error: reason=unsupported_auth_type, type={auth_type}")
+            logger.warning(
+                f"get_current_user_error: reason=unsupported_auth_type, type={auth_type}"
+            )
             raise HTTPException(
                 status_code=401,
                 detail="Unsupported authorization type (use 'Bearer' or 'ApiKey')",

@@ -113,15 +113,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         if engine is not None:
                             async for session in get_session(engine):
                                 key_hash = hash_api_key(api_key)
-                                stmt = select(ApiKeyORM.team_id, ApiKeyORM.expires_at, ApiKeyORM.is_active).where(
-                                    ApiKeyORM.key_hash == key_hash
-                                )
+                                stmt = select(
+                                    ApiKeyORM.team_id, ApiKeyORM.expires_at, ApiKeyORM.is_active
+                                ).where(ApiKeyORM.key_hash == key_hash)
                                 result = await session.execute(stmt)
                                 row = result.first()
                                 if row:
                                     db_team_id, expires_at, is_active = row
                                     if is_active:
-                                        if expires_at is None or expires_at >= datetime.now(timezone.utc):
+                                        if expires_at is None or expires_at >= datetime.now(
+                                            timezone.utc
+                                        ):
                                             team_id = db_team_id
                                             request.state.team_id = team_id
                                 break

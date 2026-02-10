@@ -146,6 +146,7 @@ async def _route_to_agent(
     back to the requested agent_slug on any error or no selection.
     """
     try:
+
         def _flag(name: str) -> bool:
             try:
                 feature_flags = getattr(settings, "feature_flags", None)
@@ -355,8 +356,8 @@ async def chat(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Agent '{agent_slug}' is not active",
-    )
+            detail=f"Agent '{agent_slug}' is not active",
+        )
 
     logger.info(
         "chat_agent_resolved: request_id=%s, agent_id=%s, agent_name=%s",

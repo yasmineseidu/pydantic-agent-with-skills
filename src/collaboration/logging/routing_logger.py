@@ -117,9 +117,7 @@ class RoutingLogger:
 
         return decisions
 
-    async def analyze_routing_patterns(
-        self, lookback_days: int = 7
-    ) -> dict[str, Any]:
+    async def analyze_routing_patterns(self, lookback_days: int = 7) -> dict[str, Any]:
         """Aggregate statistics on routing patterns.
 
         Calculates success rates, average confidence, and decision times
@@ -186,9 +184,7 @@ class RoutingLogger:
 
         # Calculate success rate and avg confidence per agent
         for agent_id, stats in by_agent.items():
-            stats["success_rate"] = self._calculate_success_rate(
-                stats["count"], total_decisions
-            )
+            stats["success_rate"] = self._calculate_success_rate(stats["count"], total_decisions)
             stats["avg_confidence"] = stats["total_confidence"] / stats["count"]
             # Remove temporary field
             del stats["total_confidence"]

@@ -82,8 +82,7 @@ class TeamMemoryBus:
                 }]
         """
         logger.info(
-            f"publish_to_team: session_id={session_id}, team_id={team_id}, "
-            f"importance={importance}"
+            f"publish_to_team: session_id={session_id}, team_id={team_id}, importance={importance}"
         )
 
         memory_dict: dict[str, Any] = {
@@ -136,8 +135,7 @@ class TeamMemoryBus:
                 }]
         """
         logger.info(
-            f"store_team_knowledge: team_id={team_id}, agent_id={agent_id}, "
-            f"importance={importance}"
+            f"store_team_knowledge: team_id={team_id}, agent_id={agent_id}, importance={importance}"
         )
 
         # Deduplication check if embedding provided
@@ -145,8 +143,7 @@ class TeamMemoryBus:
             is_duplicate = await self._deduplicate_memories(team_id, embedding)
             if is_duplicate:
                 logger.info(
-                    f"store_team_knowledge_duplicate: team_id={team_id}, "
-                    "skipping duplicate memory"
+                    f"store_team_knowledge_duplicate: team_id={team_id}, skipping duplicate memory"
                 )
                 return []
 
@@ -221,9 +218,7 @@ class TeamMemoryBus:
             offset=0,
         )
 
-        logger.info(
-            f"team_context_retrieved: team_id={team_id}, count={len(memories)}"
-        )
+        logger.info(f"team_context_retrieved: team_id={team_id}, count={len(memories)}")
 
         # Convert to dicts
         memory_dicts: list[dict[str, Any]] = []
@@ -266,8 +261,7 @@ class TeamMemoryBus:
 
         if similar_memories:
             logger.debug(
-                f"deduplication_check: team_id={team_id}, "
-                f"found_similar={len(similar_memories)}"
+                f"deduplication_check: team_id={team_id}, found_similar={len(similar_memories)}"
             )
             return True
 

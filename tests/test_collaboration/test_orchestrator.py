@@ -46,7 +46,9 @@ async def test_orchestrate_collaboration_completes() -> None:
         pattern=CollaborationPattern.SUPERVISOR_WORKER,
         goal="Test",
         initiator_id=base_session.initiator_id,
-        participants=[ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")],
+        participants=[
+            ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")
+        ],
     )
 
     assert result.status == CollaborationStatus.COMPLETED
@@ -75,7 +77,9 @@ async def test_execute_pattern_dispatches() -> None:
 
     await orchestrator.execute_pattern(
         session=collab_session,
-        participants=[ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")],
+        participants=[
+            ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")
+        ],
     )
 
     orchestrator._execute_supervisor_worker.assert_awaited()
@@ -83,13 +87,17 @@ async def test_execute_pattern_dispatches() -> None:
     collab_session = collab_session.model_copy(update={"pattern": CollaborationPattern.BRAINSTORM})
     await orchestrator.execute_pattern(
         session=collab_session,
-        participants=[ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")],
+        participants=[
+            ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")
+        ],
     )
     orchestrator._execute_brainstorm.assert_awaited()
 
     collab_session = collab_session.model_copy(update={"pattern": CollaborationPattern.CONSENSUS})
     await orchestrator.execute_pattern(
         session=collab_session,
-        participants=[ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")],
+        participants=[
+            ParticipantConfig(agent_id=uuid4(), role=ParticipantRole.PRIMARY, instructions="")
+        ],
     )
     orchestrator._execute_consensus.assert_awaited()

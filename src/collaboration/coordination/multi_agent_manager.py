@@ -268,8 +268,7 @@ class MultiAgentManager:
         session_orms = result.scalars().all()
 
         logger.info(
-            f"active_sessions_queried: count={len(session_orms)}, "
-            f"conversation_id={conversation_id}"
+            f"active_sessions_queried: count={len(session_orms)}, conversation_id={conversation_id}"
         )
 
         # Convert to Pydantic models

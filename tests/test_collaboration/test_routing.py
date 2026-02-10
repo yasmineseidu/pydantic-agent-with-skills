@@ -12,7 +12,9 @@ from src.collaboration.routing.agent_directory import AgentDirectory
 from src.collaboration.routing.agent_router import AgentRouter
 
 
-def _mock_profile(agent_id, name: str, capabilities: list[str], specializations: list[str]) -> AgentProfile:
+def _mock_profile(
+    agent_id, name: str, capabilities: list[str], specializations: list[str]
+) -> AgentProfile:
     return AgentProfile(
         agent_id=agent_id,
         name=name,

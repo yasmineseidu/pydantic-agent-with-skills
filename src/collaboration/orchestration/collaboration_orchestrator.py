@@ -213,8 +213,7 @@ class CollaborationOrchestrator:
 
         if not handoff_result.success:
             logger.warning(
-                f"coordinate_agents_failed: session_id={session.id}, "
-                f"reason={handoff_result.reason}"
+                f"coordinate_agents_failed: session_id={session.id}, reason={handoff_result.reason}"
             )
 
         return session
@@ -305,9 +304,7 @@ class CollaborationOrchestrator:
         session.final_result = final_result
         session.stage_outputs = stage_outputs
 
-        logger.info(
-            f"supervisor_worker_completed: session_id={session.id}, workers={len(workers)}"
-        )
+        logger.info(f"supervisor_worker_completed: session_id={session.id}, workers={len(workers)}")
 
         return session
 
@@ -328,9 +325,7 @@ class CollaborationOrchestrator:
         Returns:
             Updated CollaborationSession with final result.
         """
-        logger.info(
-            f"pipeline_pattern: session_id={session.id}, participants={len(participants)}"
-        )
+        logger.info(f"pipeline_pattern: session_id={session.id}, participants={len(participants)}")
 
         # Sort participants by dependency order (root first)
         ordered = self._topological_sort(participants)
@@ -410,7 +405,9 @@ class CollaborationOrchestrator:
 
         # Stage 1: Creator produces initial output
         stage_outputs = []
-        initial_output = f"Creator {creator.agent_id} produced initial output: {creator.instructions[:100]}"
+        initial_output = (
+            f"Creator {creator.agent_id} produced initial output: {creator.instructions[:100]}"
+        )
 
         stage_outputs.append(
             StageOutput(
@@ -424,9 +421,7 @@ class CollaborationOrchestrator:
         # Stage 2: Reviewers provide feedback
         feedback_items = []
         for reviewer in reviewers:
-            feedback = (
-                f"Reviewer {reviewer.agent_id} feedback: {reviewer.instructions[:100]}"
-            )
+            feedback = f"Reviewer {reviewer.agent_id} feedback: {reviewer.instructions[:100]}"
             feedback_items.append(feedback)
 
             stage_outputs.append(
@@ -462,9 +457,7 @@ class CollaborationOrchestrator:
         session.final_result = final_result
         session.stage_outputs = stage_outputs
 
-        logger.info(
-            f"peer_review_completed: session_id={session.id}, reviewers={len(reviewers)}"
-        )
+        logger.info(f"peer_review_completed: session_id={session.id}, reviewers={len(reviewers)}")
 
         return session
 
@@ -517,9 +510,7 @@ class CollaborationOrchestrator:
         session.final_result = final_result
         session.stage_outputs = stage_outputs
 
-        logger.info(
-            f"brainstorm_completed: session_id={session.id}, ideas={len(ideas)}"
-        )
+        logger.info(f"brainstorm_completed: session_id={session.id}, ideas={len(ideas)}")
 
         return session
 
@@ -540,9 +531,7 @@ class CollaborationOrchestrator:
         Returns:
             Updated CollaborationSession with final result.
         """
-        logger.info(
-            f"consensus_pattern: session_id={session.id}, participants={len(participants)}"
-        )
+        logger.info(f"consensus_pattern: session_id={session.id}, participants={len(participants)}")
 
         # Round 1: Initial proposals
         stage_outputs = []
@@ -586,9 +575,7 @@ class CollaborationOrchestrator:
         session.final_result = final_result
         session.stage_outputs = stage_outputs
 
-        logger.info(
-            f"consensus_completed: session_id={session.id}, rounds=2"
-        )
+        logger.info(f"consensus_completed: session_id={session.id}, rounds=2")
 
         return session
 
@@ -664,9 +651,7 @@ class CollaborationOrchestrator:
         session.final_result = final_result
         session.stage_outputs = stage_outputs
 
-        logger.info(
-            f"delegation_completed: session_id={session.id}, delegates={len(delegates)}"
-        )
+        logger.info(f"delegation_completed: session_id={session.id}, delegates={len(delegates)}")
 
         return session
 

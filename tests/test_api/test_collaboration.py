@@ -366,7 +366,9 @@ async def test_cancel_task_commits(auth_client, app, db_session) -> None:
     task_orm.delegation_depth = 0
     task_orm.title = "Task"
 
-    db_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=task_orm)))
+    db_session.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=task_orm))
+    )
 
     test_settings = load_settings()
     test_settings.feature_flags.enable_task_delegation = True
@@ -404,7 +406,9 @@ async def test_agent_inbox_returns_messages(auth_client, app, db_session) -> Non
     agent = MagicMock()
     agent.id = uuid4()
 
-    db_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=agent)))
+    db_session.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=agent))
+    )
 
     test_settings = load_settings()
     test_settings.feature_flags.enable_collaboration = True
@@ -425,7 +429,9 @@ async def test_send_agent_message_commits(auth_client, app, db_session) -> None:
     agent = MagicMock()
     agent.id = uuid4()
 
-    db_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=agent)))
+    db_session.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=agent))
+    )
 
     test_settings = load_settings()
     test_settings.feature_flags.enable_collaboration = True
