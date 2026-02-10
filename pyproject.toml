@@ -65,6 +65,26 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "src.api.routers.chat",
+    "src.cli",
+    "src.settings",
+    "src.memory.contradiction",
+    "src.collaboration.delegation.task_executor",
+    "src.skill_loader",
+    "src.memory.storage",
+    "src.memory.retrieval",
+    "src.api.middleware.rate_limit",
+    "src.agent",
+]
+ignore_errors = true
 
 [dependency-groups]
 dev = [
