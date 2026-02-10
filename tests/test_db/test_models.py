@@ -63,6 +63,7 @@ EXPECTED_TABLES = {
     "memory",
     "memory_log",
     "memory_tag",
+    "scheduled_job",
 }
 
 
@@ -77,7 +78,7 @@ class TestTableRegistration:
 
     def test_table_count(self, all_tables: set[str]) -> None:
         """Exactly 9 tables should be registered."""
-        assert len(all_tables) == 13
+        assert len(all_tables) == 14
 
 
 # ---------------------------------------------------------------------------

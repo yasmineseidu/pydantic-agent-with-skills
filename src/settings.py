@@ -29,6 +29,9 @@ class FeatureFlags(BaseModel):
     enable_integrations: bool = Field(default=False, description="Phase 9: Telegram/Slack")
     enable_redis_cache: bool = Field(default=False, description="Phase 3: Redis caching layer")
     enable_api: bool = Field(default=False, description="Phase 4: FastAPI REST API")
+    enable_background_processing: bool = Field(
+        default=False, description="Phase 6: Celery background tasks"
+    )
 
 
 class Settings(BaseSettings):

@@ -472,17 +472,43 @@ async def chat(
                 {"role": "assistant", "content": response_text},
             ]
 
-            asyncio.create_task(
-                _extract_memories(
-                    extractor=agent_deps.memory_extractor,
-                    messages=messages_for_extraction,
-                    team_id=team_id,
-                    agent_id=agent_orm.id,
-                    user_id=user.id,
-                    conversation_id=conversation.id,
-                    request_id=request_id,
+            # Try Celery dispatch if background processing enabled
+            _dispatched = False
+            if settings.feature_flags.enable_background_processing:
+                try:
+                    from workers.tasks.memory_tasks import extract_memories
+
+                    extract_memories.delay(
+                        messages=messages_for_extraction,
+                        team_id=str(team_id),
+                        agent_id=str(agent_orm.id),
+                        user_id=str(user.id),
+                        conversation_id=str(conversation.id),
+                    )
+                    _dispatched = True
+                    logger.info(
+                        "chat_extraction_celery_dispatched: request_id=%s",
+                        request_id,
+                    )
+                except Exception as celery_exc:
+                    logger.warning(
+                        "chat_extraction_celery_failed: request_id=%s, error=%s, falling_back=asyncio",
+                        request_id,
+                        str(celery_exc),
+                    )
+
+            if not _dispatched:
+                asyncio.create_task(
+                    _extract_memories(
+                        extractor=agent_deps.memory_extractor,
+                        messages=messages_for_extraction,
+                        team_id=team_id,
+                        agent_id=agent_orm.id,
+                        user_id=user.id,
+                        conversation_id=conversation.id,
+                        request_id=request_id,
+                    )
                 )
-            )
             logger.info(
                 "chat_extraction_triggered: request_id=%s, conversation_id=%s",
                 request_id,
@@ -832,17 +858,43 @@ async def _stream_agent_response(
                     {"role": "assistant", "content": response_text},
                 ]
 
-                asyncio.create_task(
-                    _extract_memories(
-                        extractor=agent_deps.memory_extractor,
-                        messages=messages_for_extraction,
-                        team_id=team_id,
-                        agent_id=agent_orm.id,
-                        user_id=user.id,
-                        conversation_id=conversation.id,
-                        request_id=request_id,
+                # Try Celery dispatch if background processing enabled
+                _dispatched = False
+                if settings.feature_flags.enable_background_processing:
+                    try:
+                        from workers.tasks.memory_tasks import extract_memories
+
+                        extract_memories.delay(
+                            messages=messages_for_extraction,
+                            team_id=str(team_id),
+                            agent_id=str(agent_orm.id),
+                            user_id=str(user.id),
+                            conversation_id=str(conversation.id),
+                        )
+                        _dispatched = True
+                        logger.info(
+                            "stream_chat_extraction_celery_dispatched: request_id=%s",
+                            request_id,
+                        )
+                    except Exception as celery_exc:
+                        logger.warning(
+                            "stream_chat_extraction_celery_failed: request_id=%s, error=%s, falling_back=asyncio",
+                            request_id,
+                            str(celery_exc),
+                        )
+
+                if not _dispatched:
+                    asyncio.create_task(
+                        _extract_memories(
+                            extractor=agent_deps.memory_extractor,
+                            messages=messages_for_extraction,
+                            team_id=team_id,
+                            agent_id=agent_orm.id,
+                            user_id=user.id,
+                            conversation_id=conversation.id,
+                            request_id=request_id,
+                        )
                     )
-                )
             except Exception as e:
                 logger.warning(
                     "stream_chat_extraction_trigger_failed: request_id=%s, error=%s",

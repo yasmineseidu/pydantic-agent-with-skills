@@ -17,6 +17,7 @@ from src.db.models.memory import (
     MemoryTierEnum,
     MemoryTypeEnum,
 )
+from src.db.models.scheduled_job import ScheduledJobORM
 from src.db.models.tracking import AuditLogORM, UsageLogORM
 from src.db.models.user import TeamMembershipORM, TeamORM, UserORM, UserRole
 
@@ -37,6 +38,7 @@ __all__ = [
     "MessageORM",
     "MessageRoleEnum",
     "RefreshTokenORM",
+    "ScheduledJobORM",
     "TeamMembershipORM",
     "TeamORM",
     "UsageLogORM",
