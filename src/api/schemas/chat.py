@@ -56,13 +56,69 @@ class StreamChunk(BaseModel):
     """Server-Sent Events stream chunk for chat streaming.
 
     Args:
-        type: Chunk type - "content" (text delta), "usage" (token stats), "done" (completion), "error"
+        type: Chunk type - "content" (text delta), "usage" (token stats),
+            "done" (completion), "error", "tool_call", "tool_result",
+            "memory_context"
         content: Text content for content chunks, error message for error chunks
         conversation_id: Conversation ID (sent in first chunk only)
         usage: Token usage statistics (sent in usage chunk only)
+        tool_name: Name of the tool being called (tool_call chunks)
+        tool_args: Arguments passed to the tool (tool_call chunks)
+        tool_call_id: Unique identifier for a tool call/result pair
+        tool_result_content: Result returned by the tool (tool_result chunks)
+        memory_count: Number of memory entries loaded (memory_context chunks)
     """
 
-    type: str  # "content", "usage", "done", "error"
+    type: str  # "content", "usage", "done", "error", "tool_call", "tool_result", "memory_context"
     content: str = ""
     conversation_id: Optional[UUID] = None
     usage: Optional[ChatUsage] = None
+    tool_name: Optional[str] = None
+    tool_args: Optional[dict] = None
+    tool_call_id: Optional[str] = None
+    tool_result_content: Optional[str] = None
+    memory_count: Optional[int] = None
+
+
+class WSClientMessage(BaseModel):
+    """WebSocket message from client to server.
+
+    Args:
+        type: Message type - "auth", "message", "ping", "cancel"
+        content: Message text content (for "message" type)
+        conversation_id: Conversation to continue (for "message" type)
+        token: Authentication token (for "auth" type)
+    """
+
+    type: str  # "auth", "message", "ping", "cancel"
+    content: Optional[str] = None
+    conversation_id: Optional[UUID] = None
+    token: Optional[str] = None
+
+
+class WSServerMessage(BaseModel):
+    """WebSocket message from server to client.
+
+    Args:
+        type: Message type - "auth_ok", "text_delta", "tool_call",
+            "tool_result", "memory_context", "typing", "usage", "done",
+            "error", "pong"
+        content: Text content or error message
+        conversation_id: Conversation ID for this message stream
+        usage: Token usage statistics (sent in "usage" type)
+        tool_name: Name of the tool being called ("tool_call" type)
+        tool_args: Arguments passed to the tool ("tool_call" type)
+        tool_call_id: Unique identifier for a tool call/result pair
+        tool_result_content: Result returned by the tool ("tool_result" type)
+        error_code: HTTP-style error code ("error" type)
+    """
+
+    type: str  # "auth_ok", "text_delta", "tool_call", "tool_result", "memory_context", "typing", "usage", "done", "error", "pong"
+    content: str = ""
+    conversation_id: Optional[UUID] = None
+    usage: Optional[ChatUsage] = None
+    tool_name: Optional[str] = None
+    tool_args: Optional[dict] = None
+    tool_call_id: Optional[str] = None
+    tool_result_content: Optional[str] = None
+    error_code: Optional[int] = None

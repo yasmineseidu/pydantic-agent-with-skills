@@ -114,9 +114,7 @@ def _scalar_one_or_none_result(value):
     return result
 
 
-def _messages_execute_side_effect(
-    conversation_mock, total_messages: int, messages: list
-) -> list:
+def _messages_execute_side_effect(conversation_mock, total_messages: int, messages: list) -> list:
     """Build three MagicMock results for get_conversation_messages.
 
     The endpoint does:
@@ -154,14 +152,10 @@ class TestListConversations:
     """Tests for GET /v1/conversations endpoint."""
 
     @pytest.mark.asyncio
-    async def test_list_conversations_success(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_list_conversations_success(self, auth_client: AsyncClient, db_session) -> None:
         """list_conversations returns paginated conversations for team."""
         conv = _make_conversation_mock(UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(1, [conv])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(1, [conv]))
 
         response = await auth_client.get("/v1/conversations?limit=20&offset=0")
 
@@ -176,13 +170,9 @@ class TestListConversations:
         assert data["offset"] == 0
 
     @pytest.mark.asyncio
-    async def test_list_conversations_empty(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_list_conversations_empty(self, auth_client: AsyncClient, db_session) -> None:
         """list_conversations returns empty items when no conversations exist."""
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(0, []))
 
         response = await auth_client.get("/v1/conversations?limit=20&offset=0")
 
@@ -197,14 +187,10 @@ class TestListConversations:
         self, auth_client: AsyncClient, db_session, test_user_id: UUID
     ) -> None:
         """list_conversations filters by agent_id when provided."""
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(0, []))
         agent_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
-        response = await auth_client.get(
-            f"/v1/conversations?agent_id={agent_id}&limit=20&offset=0"
-        )
+        response = await auth_client.get(f"/v1/conversations?agent_id={agent_id}&limit=20&offset=0")
 
         assert response.status_code == 200
         data = response.json()
@@ -216,13 +202,9 @@ class TestListConversations:
         self, auth_client: AsyncClient, db_session
     ) -> None:
         """list_conversations filters by status when provided."""
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(0, []))
 
-        response = await auth_client.get(
-            "/v1/conversations?status=active&limit=20&offset=0"
-        )
+        response = await auth_client.get("/v1/conversations?status=active&limit=20&offset=0")
 
         assert response.status_code == 200
         data = response.json()
@@ -234,9 +216,7 @@ class TestListConversations:
         self, auth_client: AsyncClient, db_session
     ) -> None:
         """list_conversations applies both agent_id and status filters."""
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(0, []))
         agent_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
         response = await auth_client.get(
@@ -252,9 +232,7 @@ class TestListConversations:
         self, auth_client: AsyncClient, db_session
     ) -> None:
         """list_conversations respects pagination parameters."""
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(20, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(20, []))
 
         response = await auth_client.get("/v1/conversations?limit=10&offset=5")
 
@@ -270,9 +248,7 @@ class TestListConversations:
         """list_conversations sets has_more correctly."""
         # total=20, offset=0, limit=10 => has_more = (0+10) < 20 = True
         conv = _make_conversation_mock(UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(20, [conv])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(20, [conv]))
 
         response = await auth_client.get("/v1/conversations?limit=10&offset=0")
 
@@ -303,15 +279,11 @@ class TestGetConversation:
     """Tests for GET /v1/conversations/{conversation_id} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_conversation_success(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_get_conversation_success(self, auth_client: AsyncClient, db_session) -> None:
         """get_conversation returns conversation details."""
         conversation_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
         conv = _make_conversation_mock(conversation_id)
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(conv)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(conv))
 
         response = await auth_client.get(f"/v1/conversations/{conversation_id}")
 
@@ -325,13 +297,9 @@ class TestGetConversation:
         assert "message_count" in data
 
     @pytest.mark.asyncio
-    async def test_get_conversation_not_found(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_get_conversation_not_found(self, auth_client: AsyncClient, db_session) -> None:
         """get_conversation returns 404 for non-existent conversation."""
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(None)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(None))
         conversation_id = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
         response = await auth_client.get(f"/v1/conversations/{conversation_id}")
@@ -339,9 +307,7 @@ class TestGetConversation:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_conversation_invalid_uuid(
-        self, auth_client: AsyncClient
-    ) -> None:
+    async def test_get_conversation_invalid_uuid(self, auth_client: AsyncClient) -> None:
         """get_conversation returns 422 for invalid UUID format."""
         response = await auth_client.get("/v1/conversations/invalid-uuid")
 
@@ -369,9 +335,7 @@ class TestGetConversationMessages:
     """Tests for GET /v1/conversations/{conversation_id}/messages endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_messages_success(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_get_messages_success(self, auth_client: AsyncClient, db_session) -> None:
         """get_conversation_messages returns paginated messages."""
         conversation_id = UUID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
         conv = _make_conversation_mock(conversation_id)
@@ -409,15 +373,11 @@ class TestGetConversationMessages:
         assert len(data["items"]) == 2
 
     @pytest.mark.asyncio
-    async def test_get_messages_pagination(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_get_messages_pagination(self, auth_client: AsyncClient, db_session) -> None:
         """get_conversation_messages respects pagination parameters."""
         conversation_id = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
         conv = _make_conversation_mock(conversation_id)
-        db_session.execute = AsyncMock(
-            side_effect=_messages_execute_side_effect(conv, 0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_messages_execute_side_effect(conv, 0, []))
 
         response = await auth_client.get(
             f"/v1/conversations/{conversation_id}/messages?limit=25&offset=10"
@@ -440,15 +400,24 @@ class TestGetConversationMessages:
         t3 = _NOW + timedelta(seconds=60)
         msg1 = _make_message_mock(
             UUID("aa111111-1111-1111-1111-111111111111"),
-            conversation_id, role="user", content="First", created_at=t1,
+            conversation_id,
+            role="user",
+            content="First",
+            created_at=t1,
         )
         msg2 = _make_message_mock(
             UUID("bb111111-1111-1111-1111-111111111111"),
-            conversation_id, role="assistant", content="Second", created_at=t2,
+            conversation_id,
+            role="assistant",
+            content="Second",
+            created_at=t2,
         )
         msg3 = _make_message_mock(
             UUID("cc111111-1111-1111-1111-111111111111"),
-            conversation_id, role="user", content="Third", created_at=t3,
+            conversation_id,
+            role="user",
+            content="Third",
+            created_at=t3,
         )
         db_session.execute = AsyncMock(
             side_effect=_messages_execute_side_effect(conv, 3, [msg1, msg2, msg3])
@@ -472,9 +441,7 @@ class TestGetConversationMessages:
         self, auth_client: AsyncClient, db_session
     ) -> None:
         """get_conversation_messages returns 404 if conversation not found."""
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(None)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(None))
         conversation_id = UUID("22222222-2222-2222-2222-222222222222")
 
         response = await auth_client.get(
@@ -484,15 +451,11 @@ class TestGetConversationMessages:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_messages_empty(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_get_messages_empty(self, auth_client: AsyncClient, db_session) -> None:
         """get_conversation_messages returns empty items when conversation has no messages."""
         conversation_id = UUID("33333333-3333-3333-3333-333333333333")
         conv = _make_conversation_mock(conversation_id)
-        db_session.execute = AsyncMock(
-            side_effect=_messages_execute_side_effect(conv, 0, [])
-        )
+        db_session.execute = AsyncMock(side_effect=_messages_execute_side_effect(conv, 0, []))
 
         response = await auth_client.get(
             f"/v1/conversations/{conversation_id}/messages?limit=50&offset=0"
@@ -528,15 +491,11 @@ class TestCloseConversation:
     """Tests for DELETE /v1/conversations/{conversation_id} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_close_conversation_success(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_close_conversation_success(self, auth_client: AsyncClient, db_session) -> None:
         """close_conversation closes a conversation."""
         conversation_id = UUID("55555555-5555-5555-5555-555555555555")
         conv = _make_conversation_mock(conversation_id)
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(conv)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(conv))
 
         response = await auth_client.delete(f"/v1/conversations/{conversation_id}")
 
@@ -547,13 +506,9 @@ class TestCloseConversation:
         assert "successfully" in data["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_close_conversation_not_found(
-        self, auth_client: AsyncClient, db_session
-    ) -> None:
+    async def test_close_conversation_not_found(self, auth_client: AsyncClient, db_session) -> None:
         """close_conversation returns 404 for non-existent conversation."""
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(None)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(None))
         conversation_id = UUID("66666666-6666-6666-6666-666666666666")
 
         response = await auth_client.delete(f"/v1/conversations/{conversation_id}")
@@ -561,9 +516,7 @@ class TestCloseConversation:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_close_conversation_invalid_uuid(
-        self, auth_client: AsyncClient
-    ) -> None:
+    async def test_close_conversation_invalid_uuid(self, auth_client: AsyncClient) -> None:
         """close_conversation returns 422 for invalid UUID format."""
         response = await auth_client.delete("/v1/conversations/invalid-uuid")
 
@@ -588,9 +541,7 @@ class TestCloseConversation:
         """close_conversation response has correct structure."""
         conversation_id = UUID("88888888-8888-8888-8888-888888888888")
         conv = _make_conversation_mock(conversation_id)
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(conv)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(conv))
 
         response = await auth_client.delete(f"/v1/conversations/{conversation_id}")
 
@@ -620,9 +571,7 @@ class TestMultiTenantIsolation:
             UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
             team_id=test_team_id,
         )
-        db_session.execute = AsyncMock(
-            side_effect=_list_execute_side_effect(1, [conv])
-        )
+        db_session.execute = AsyncMock(side_effect=_list_execute_side_effect(1, [conv]))
 
         response = await auth_client.get("/v1/conversations?limit=20&offset=0")
 
@@ -637,9 +586,7 @@ class TestMultiTenantIsolation:
     ) -> None:
         """get_conversation returns 404 if conversation belongs to different team."""
         # Simulate no result (different team => not found)
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(None)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(None))
         conversation_id = UUID("99999999-9999-9999-9999-999999999999")
 
         response = await auth_client.get(f"/v1/conversations/{conversation_id}")
@@ -651,9 +598,7 @@ class TestMultiTenantIsolation:
         self, auth_client: AsyncClient, db_session, test_team_id: UUID
     ) -> None:
         """close_conversation returns 404 if conversation belongs to different team."""
-        db_session.execute = AsyncMock(
-            return_value=_scalar_one_or_none_result(None)
-        )
+        db_session.execute = AsyncMock(return_value=_scalar_one_or_none_result(None))
         conversation_id = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 
         response = await auth_client.delete(f"/v1/conversations/{conversation_id}")

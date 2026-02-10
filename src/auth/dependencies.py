@@ -1,11 +1,13 @@
 """FastAPI dependencies for authentication and authorization."""
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Callable, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, WebSocket
+from starlette.websockets import WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -253,3 +255,129 @@ def require_role(required_role: str) -> Callable:
         return user, team_id
 
     return role_checker
+
+
+async def authenticate_websocket(
+    websocket: WebSocket,
+    db: AsyncSession,
+    settings: Settings,
+) -> tuple[UserORM, UUID]:
+    """Authenticate a WebSocket connection via query param or first message.
+
+    Supports two auth methods:
+    1. Query parameter: ?token=<jwt> - validated before accept
+    2. First message: {"type": "auth", "token": "..."} - with 10s timeout after accept
+
+    Args:
+        websocket: The WebSocket connection to authenticate.
+        db: Async database session for user lookups.
+        settings: Application settings with JWT configuration.
+
+    Returns:
+        Tuple of (UserORM, team_id) on successful authentication.
+
+    Raises:
+        WebSocketDisconnect: Connection closed with code 4001 on auth failure.
+    """
+    token: Optional[str] = websocket.query_params.get("token")
+
+    if token:
+        # Method 1: Query parameter auth (validate before accept)
+        user, team_id = await _validate_ws_token(token, db)
+        if user is None or team_id is None:
+            await websocket.close(code=4001, reason="Authentication failed")
+            raise WebSocketDisconnect(code=4001, reason="Authentication failed")
+        await websocket.accept()
+        logger.info(
+            f"authenticate_websocket_success: method=query_param, user_id={user.id}, "
+            f"team_id={team_id}"
+        )
+        return user, team_id
+
+    # Method 2: First message auth (accept first, then wait for auth message)
+    await websocket.accept()
+    try:
+        message = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+    except asyncio.TimeoutError:
+        logger.warning("authenticate_websocket_error: reason=authentication_timeout")
+        await websocket.close(code=4001, reason="Authentication timeout")
+        raise WebSocketDisconnect(code=4001, reason="Authentication timeout")
+    except Exception as e:
+        logger.warning(f"authenticate_websocket_error: reason=receive_failed, error={str(e)}")
+        await websocket.close(code=4001, reason="Authentication failed")
+        raise WebSocketDisconnect(code=4001, reason="Authentication failed")
+
+    # Validate message structure
+    if not isinstance(message, dict) or message.get("type") != "auth" or "token" not in message:
+        logger.warning("authenticate_websocket_error: reason=invalid_auth_message")
+        await websocket.close(code=4001, reason="Authentication failed")
+        raise WebSocketDisconnect(code=4001, reason="Authentication failed")
+
+    user, team_id = await _validate_ws_token(message["token"], db)
+    if user is None or team_id is None:
+        await websocket.close(code=4001, reason="Authentication failed")
+        raise WebSocketDisconnect(code=4001, reason="Authentication failed")
+
+    await websocket.send_json({"type": "auth_ok"})
+    logger.info(
+        f"authenticate_websocket_success: method=first_message, user_id={user.id}, "
+        f"team_id={team_id}"
+    )
+    return user, team_id
+
+
+async def _validate_ws_token(
+    token: str,
+    db: AsyncSession,
+) -> tuple[Optional[UserORM], Optional[UUID]]:
+    """Validate a JWT token for WebSocket authentication.
+
+    Args:
+        token: JWT token string to validate.
+        db: Async database session for user lookup.
+
+    Returns:
+        Tuple of (UserORM, team_id) on success, or (None, None) on failure.
+    """
+    try:
+        payload: TokenPayload = decode_token(token)
+
+        if payload.token_type != "access":
+            logger.warning(
+                f"_validate_ws_token_error: reason=invalid_token_type, type={payload.token_type}"
+            )
+            return None, None
+
+        now = datetime.now(timezone.utc)
+        if payload.exp < now:
+            logger.warning(f"_validate_ws_token_error: reason=token_expired, user_id={payload.sub}")
+            return None, None
+
+        if not payload.team_id:
+            logger.warning(
+                f"_validate_ws_token_error: reason=missing_team_id, user_id={payload.sub}"
+            )
+            return None, None
+
+        stmt = select(UserORM).where(UserORM.id == payload.sub)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            logger.warning(
+                f"_validate_ws_token_error: reason=user_not_found, user_id={payload.sub}"
+            )
+            return None, None
+
+        if not user.is_active:
+            logger.warning(f"_validate_ws_token_error: reason=user_inactive, user_id={user.id}")
+            return None, None
+
+        return user, payload.team_id
+
+    except ValueError as e:
+        logger.warning(f"_validate_ws_token_error: reason=jwt_decode_failed, error={str(e)}")
+        return None, None
+    except Exception as e:
+        logger.exception(f"_validate_ws_token_error: reason=unexpected_error, error={str(e)}")
+        return None, None

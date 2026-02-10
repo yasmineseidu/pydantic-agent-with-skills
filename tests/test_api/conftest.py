@@ -1,10 +1,13 @@
 """Shared fixtures for API router tests."""
 
 import pytest
-from typing import AsyncGenerator, Dict
+from typing import TYPE_CHECKING, AsyncGenerator, Dict
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 from datetime import datetime, timezone
+
+if TYPE_CHECKING:
+    from starlette.testclient import TestClient
 
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,9 +124,7 @@ def auth_headers(test_user_id: UUID, test_team_id: UUID) -> Dict[str, str]:
         test_settings.jwt_secret_key = "test-secret-key-for-jwt-testing-only-not-for-production"
 
     with patch("src.auth.jwt.load_settings", return_value=test_settings):
-        access_token = create_access_token(
-            user_id=test_user_id, team_id=test_team_id, role="admin"
-        )
+        access_token = create_access_token(user_id=test_user_id, team_id=test_team_id, role="admin")
     return {"Authorization": f"Bearer {access_token}"}
 
 
@@ -185,7 +186,9 @@ async def app(test_user_id: UUID, test_team_id: UUID, db_session: AsyncSession):
     import src.auth.dependencies
 
     test_app.dependency_overrides[src.settings.load_settings] = override_load_settings
-    test_app.dependency_overrides[src.auth.dependencies.get_current_user] = override_get_current_user
+    test_app.dependency_overrides[src.auth.dependencies.get_current_user] = (
+        override_get_current_user
+    )
 
     yield test_app
 
@@ -209,7 +212,9 @@ async def client(app) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-async def auth_client(app, test_user_id: UUID, test_team_id: UUID) -> AsyncGenerator[AsyncClient, None]:
+async def auth_client(
+    app, test_user_id: UUID, test_team_id: UUID
+) -> AsyncGenerator[AsyncClient, None]:
     """httpx AsyncClient with auth headers pre-configured.
 
     Args:
@@ -226,3 +231,81 @@ async def auth_client(app, test_user_id: UUID, test_team_id: UUID) -> AsyncGener
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
         yield ac
+
+
+@pytest.fixture
+def sync_client(app) -> "TestClient":
+    """Starlette TestClient for synchronous WebSocket testing.
+
+    Required because httpx AsyncClient doesn't support WebSocket connections.
+    Uses Starlette's TestClient which provides websocket_connect().
+
+    Args:
+        app: FastAPI application fixture.
+
+    Returns:
+        A Starlette TestClient bound to the test app.
+    """
+    from starlette.testclient import TestClient
+
+    return TestClient(app)
+
+
+@pytest.fixture
+def ws_auth_token(test_user_id: UUID, test_team_id: UUID) -> str:
+    """Valid JWT token string for WebSocket authentication.
+
+    Creates a short-lived JWT token that can be passed as a query parameter
+    or in the first WebSocket message for authentication.
+
+    Args:
+        test_user_id: Fixed user UUID fixture.
+        test_team_id: Fixed team UUID fixture.
+
+    Returns:
+        JWT token string (without "Bearer " prefix).
+    """
+    from unittest.mock import patch
+
+    from src.settings import Settings
+
+    test_settings = Settings()
+    if not test_settings.jwt_secret_key:
+        test_settings.jwt_secret_key = "test-secret-key-for-jwt-testing-only-not-for-production"
+
+    with patch("src.auth.jwt.load_settings", return_value=test_settings):
+        token = create_access_token(user_id=test_user_id, team_id=test_team_id, role="admin")
+    return token
+
+
+@pytest.fixture
+def mock_agent_for_streaming(test_team_id: UUID) -> MagicMock:
+    """Mock AgentORM configured for streaming tests.
+
+    Args:
+        test_team_id: Fixed team UUID fixture.
+
+    Returns:
+        A MagicMock configured as an active AgentORM.
+    """
+    from src.db.models.agent import AgentORM, AgentStatusEnum
+
+    agent = MagicMock(spec=AgentORM)
+    agent.id = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    agent.team_id = test_team_id
+    agent.name = "Test Streamer"
+    agent.slug = "test-streamer"
+    agent.tagline = "A test agent for streaming"
+    agent.avatar_emoji = ""
+    agent.status = AgentStatusEnum.ACTIVE.value
+    agent.shared_skill_names = []
+    agent.custom_skill_names = []
+    agent.disabled_skill_names = []
+    agent.personality = None
+    agent.model_config_json = None
+    agent.memory_config = None
+    agent.boundaries = None
+    agent.created_by = None
+    agent.created_at = datetime.now(timezone.utc)
+    agent.updated_at = datetime.now(timezone.utc)
+    return agent

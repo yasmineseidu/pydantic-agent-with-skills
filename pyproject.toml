@@ -59,6 +59,7 @@ warn_return_any = true
 dev = [
     "fakeredis[lua]~=2.26.0",
     "httpx>=0.27.0",
+    "httpx-ws>=0.6.0",
     "mypy>=1.19.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",

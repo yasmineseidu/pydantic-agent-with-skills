@@ -145,9 +145,7 @@ class TestListAgents:
         assert data["items"][0]["name"] == "Agent 1"
 
     @pytest.mark.asyncio
-    async def test_list_agents_respects_limit_and_offset(
-        self, auth_client, db_session
-    ) -> None:
+    async def test_list_agents_respects_limit_and_offset(self, auth_client, db_session) -> None:
         """List agents respects limit and offset pagination parameters."""
         # Mock count query
         count_mock = MagicMock()
@@ -235,6 +233,7 @@ class TestCreateAgent:
         db_session.execute = AsyncMock(return_value=existing_mock)
         db_session.add = MagicMock()
         db_session.commit = AsyncMock()
+
         # refresh must populate the ORM object created in the route with real values
         async def mock_refresh(obj):
             obj.id = agent.id
@@ -314,8 +313,12 @@ class TestCreateAgent:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    @patch("src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False)
-    async def test_create_agent_requires_admin_role(self, mock_perm, app, client, db_session) -> None:
+    @patch(
+        "src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False
+    )
+    async def test_create_agent_requires_admin_role(
+        self, mock_perm, app, client, db_session
+    ) -> None:
         """Create agent requires admin role (member role returns 403)."""
         _setup_require_role_override(app, db_session)
 
@@ -486,8 +489,12 @@ class TestUpdateAgent:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False)
-    async def test_update_agent_requires_admin_role(self, mock_perm, app, client, db_session) -> None:
+    @patch(
+        "src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False
+    )
+    async def test_update_agent_requires_admin_role(
+        self, mock_perm, app, client, db_session
+    ) -> None:
         """Update agent requires admin role (member role returns 403)."""
         _setup_require_role_override(app, db_session)
 
@@ -562,8 +569,12 @@ class TestDeleteAgent:
         assert "not found" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    @patch("src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False)
-    async def test_delete_agent_requires_admin_role(self, mock_perm, app, client, db_session) -> None:
+    @patch(
+        "src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=False
+    )
+    async def test_delete_agent_requires_admin_role(
+        self, mock_perm, app, client, db_session
+    ) -> None:
         """Delete agent requires admin role (member role returns 403)."""
         _setup_require_role_override(app, db_session)
 

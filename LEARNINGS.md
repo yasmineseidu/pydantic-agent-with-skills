@@ -97,6 +97,17 @@
 - DECISION: Phase 3 Redis → feature-flagged `enable_redis_cache`, 4 cache modules, 86 new tests
 - DECISION: Redis integration opt-in → `hot_cache` and `redis_cache` params default to None
 - DECISION: Phase 4 Auth+API → FastAPI app factory, JWT+API key dual auth, 4 new ORM models, 7 routers, ~244 new tests
+- DECISION: Phase 5 UIAdapter skipped → agent.iter() + node.stream() gives full control over 8-step chat flow
+- DECISION: No new DB tables, settings, or deps in Phase 5 (except httpx-ws dev)
+- PATTERN: shared streaming helper → _stream_agent_response() async gen reused by SSE + WS
+- PATTERN: PartStartEvent part_kind → event.part.part_kind == "tool-call" for ToolCallPart
+- PATTERN: WS auth dual method → query param ?token=jwt or first message auth with 10s timeout
+- PATTERN: WS cancel → wrap streaming in asyncio.Task, cancel on client message type "cancel"
+- PATTERN: WS rate limit → manual check before accept (code 4029), BaseHTTPMiddleware skips WS
+- GOTCHA: BaseHTTPMiddleware does NOT apply to WebSocket connections
+- GOTCHA: httpx AsyncClient has no WS support → starlette TestClient for WS tests (sync)
+- GOTCHA: ToolCallPartDelta not useful for events → use PartStartEvent ToolCallPart instead
+- GOTCHA: WS cancel needs non-blocking task → asyncio.create_task + main loop receives cancel
 
 ## Useful Grep Patterns
 
@@ -125,3 +136,4 @@
 - 2026-02-10 phase4-test-fixes: fixed 62 test failures across 4 files, 4 parallel bugsy agents, 775 tests pass
 - 2026-02-10 phase4.1-mypy: fixed 51 mypy errors across 8 files, 6 parallel builder agents, 0 Phase 4 mypy errors remain
 - 2026-02-10 phase4.2-gaps: added /me, /logout, /stream, HealthResponse schema, 4 parallel builders, 783 tests pass
+- 2026-02-10 phase5-build: 25 tasks, 10 waves, ~20 agents deployed, 833 tests (50 new), 0 failures

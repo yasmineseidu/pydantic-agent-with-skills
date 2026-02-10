@@ -6,6 +6,7 @@ from src.auth.api_keys import (
     validate_api_key_format,
 )
 from src.auth.dependencies import (
+    authenticate_websocket,
     get_current_user,
     require_role,
 )
@@ -22,6 +23,7 @@ from src.auth.password import (
 )
 
 __all__ = [
+    "authenticate_websocket",
     "create_access_token",
     "create_refresh_token",
     "decode_token",
