@@ -7,6 +7,8 @@
 - MISTAKE: `uv run pytest` uses system Python → use `.venv/bin/python -m pytest tests/ -v`
 - MISTAKE: `uv sync` skips optional dev deps → use `uv add --dev pytest ruff mypy`
 - MISTAKE: 14 pre-existing ruff warnings (F541, F401) → these are NOT from agent team setup
+- MISTAKE: ruff F541 f-strings without placeholders → remove `f` prefix from static error return strings
+- MISTAKE: mock `session.add()` (sync method) creates coroutine warning → harmless but noisy in tests
 
 ## Patterns That Work
 
@@ -20,6 +22,15 @@
 - PATTERN: ORM suffix convention → `UserORM` avoids collision with Pydantic `UserCreate`
 - PATTERN: SA metadata column → map `metadata` as `metadata_json` in Python (SA reserved word)
 - PATTERN: Settings Optional fields → all new DB fields Optional so CLI works without DB
+- PATTERN: TYPE_CHECKING → forward refs in dependencies.py avoid circular imports at runtime
+- PATTERN: factory function → `create_skill_agent(dna=None)` returns singleton or new Agent
+- PATTERN: 7-layer prompt → protected L1-L3 never trimmed, trim order L7→L6→L5→L4
+- PATTERN: double-pass extraction → Pass1 high-confidence, Pass2 gap-filling, cosine >0.95 dedup
+- PATTERN: 5-signal retrieval → semantic + recency(exp decay) + importance + continuity + relationship
+- PATTERN: orthogonal embeddings → `[1]*768+[0]*768` vs `[0]*768+[1]*768` for low-similarity tests
+- PATTERN: wave-based parallel build → group tasks by deps, deploy 3-4 agents per wave, max parallel
+- PATTERN: token estimation → `math.ceil(len(text)/3.5)` heuristic, good enough for budget trimming
+- PATTERN: FeatureFlags nested model → `settings.feature_flags.enable_memory` for runtime toggles
 
 ## Gotchas
 
@@ -32,6 +43,10 @@
 - GOTCHA: memory_log.memory_id → NO FK intentionally (ADR-8: survives memory deletes)
 - GOTCHA: pgvector IVFFlat → needs `CREATE EXTENSION vector` before index creation
 - GOTCHA: SA JSONB defaults → use `server_default=text("'{...}'::jsonb")` not `default={}`
+- GOTCHA: FunctionToolset[None] mypy error → pre-existing pydantic-ai type issue, ignore
+- GOTCHA: cosine similarity dedup threshold → 0.95 for extraction, 0.92 for DB duplicate check
+- GOTCHA: httpx code fence parsing → LLMs wrap JSON in ```json...```, must strip before json.loads
+- GOTCHA: tier_manager demotion → never demote identity type, pinned, or importance >= 8
 
 ## Architecture
 
@@ -40,6 +55,9 @@
 - DECISION: `BaseSettings Settings` → env var loading
 - DECISION: skills are filesystem-based → no DB for MVP
 - DECISION: Phase 1 DB → 9 tables, src/db/ + src/models/ packages, 19 tasks in 9 waves
+- DECISION: Phase 2 Memory → 10 modules in src/memory/, 4 in src/moe/, 14 test files, 273 new tests
+- DECISION: compaction shield feature-flagged → `enable_compaction_shield` controls extraction before trim
+- DECISION: CostGuard uses asyncio.Lock → in-memory daily/monthly budget tracking, no DB needed
 
 ## Useful Grep Patterns
 
@@ -58,3 +76,5 @@
 - 2026-02-09 4-enforce: LSP + Plan + Learning + TaskMgmt mandatory across all agents
 - 2026-02-09 settings: MCP settings in .claude/settings.json + ~/.claude/settings.json, grep-local-first mandatory, non-verbose learnings
 - 2026-02-09 prd-phase1: 19 tasks created (#6-#24), 9 waves, 7 tracks, critical path 8 deep
+- 2026-02-09 phase2-build: 24 tasks, 7 waves, 21 agents deployed, 445 tests (273 new), 0 failures
+- 2026-02-09 phase2-commit: 106df03 pushed to main, 49 files changed, 11232 lines added
