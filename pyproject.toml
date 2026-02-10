@@ -47,6 +47,13 @@ packages = ["src"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:You should use `Logger` instead\\.:DeprecationWarning",
+    "ignore:You should use `LoggerProvider` instead\\.:DeprecationWarning",
+    "ignore:You should use `ProxyLoggerProvider` instead\\.:DeprecationWarning",
+    "ignore:unclosed transport <_SelectorSocketTransport.*:ResourceWarning",
+    "ignore:unclosed event loop <_UnixSelectorEventLoop.*:ResourceWarning",
+]
 markers = [
     "unit: unit tests",
 ]

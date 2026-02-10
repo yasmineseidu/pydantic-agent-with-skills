@@ -300,12 +300,16 @@ class TestCreateAgent:
         assert "already exists" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_create_agent_invalid_slug_format_returns_422(self, auth_client) -> None:
+    @patch("src.auth.dependencies.check_team_permission", new_callable=AsyncMock, return_value=True)
+    async def test_create_agent_invalid_slug_format_returns_422(
+        self, mock_perm, auth_client, app, db_session
+    ) -> None:
         """Create agent with invalid slug format is rejected.
 
         Depending on dependency evaluation order, RBAC may reject first (403)
         before request-body validation (422) is reached.
         """
+        _setup_require_role_override(app, db_session)
         response = await auth_client.post(
             "/v1/agents",
             json={

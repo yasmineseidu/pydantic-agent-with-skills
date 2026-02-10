@@ -31,6 +31,17 @@ logout = auth_router.logout
 get_me = auth_router.get_me
 
 
+def _mock_db_session() -> AsyncMock:
+    """Build an AsyncSession-like mock with sync add()."""
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    return db
+
+
 class TestRegister:
     """Tests for POST /v1/auth/register endpoint."""
 
@@ -45,7 +56,7 @@ class TestRegister:
     @pytest.mark.asyncio
     async def test_register_duplicate_email_raises_400(self) -> None:
         """Registering with existing email should raise 400."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
 
         # Mock existing user check (user exists)
@@ -70,7 +81,7 @@ class TestRegister:
     @pytest.mark.asyncio
     async def test_register_weak_password_raises_400(self) -> None:
         """Registering with weak password should raise 400."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
 
         # Mock no existing user
@@ -101,7 +112,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_success_returns_tokens(self) -> None:
         """Successful login should return access and refresh tokens."""
-        db = AsyncMock()
+        db = _mock_db_session()
 
         # Mock user lookup (user exists)
         user = MagicMock(spec=UserORM)
@@ -142,7 +153,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_wrong_password_raises_401(self) -> None:
         """Login with wrong password should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
 
         # Mock user lookup (user exists)
         user = MagicMock(spec=UserORM)
@@ -165,7 +176,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_nonexistent_email_raises_401(self) -> None:
         """Login with non-existent email should raise 401 (same error as wrong password)."""
-        db = AsyncMock()
+        db = _mock_db_session()
 
         # Mock user lookup (user does not exist)
         mock_result = MagicMock()
@@ -183,7 +194,7 @@ class TestLogin:
     @pytest.mark.asyncio
     async def test_login_inactive_user_raises_401(self) -> None:
         """Login with inactive user account should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
 
         # Mock user lookup (user exists but inactive)
         user = MagicMock(spec=UserORM)
@@ -212,7 +223,7 @@ class TestRefreshToken:
     @pytest.mark.asyncio
     async def test_refresh_success_rotates_tokens(self) -> None:
         """Successful refresh should return new token pair and revoke old token."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
         settings.jwt_refresh_token_expire_days = 7
 
@@ -259,7 +270,7 @@ class TestRefreshToken:
     @pytest.mark.asyncio
     async def test_refresh_invalid_token_raises_401(self) -> None:
         """Refresh with invalid token should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
 
         request = RefreshRequest(refresh_token="invalid_token")
@@ -274,7 +285,7 @@ class TestRefreshToken:
     @pytest.mark.asyncio
     async def test_refresh_revoked_token_raises_401(self) -> None:
         """Refresh with revoked token should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
 
         user_id = uuid4()
@@ -305,7 +316,7 @@ class TestRefreshToken:
     @pytest.mark.asyncio
     async def test_refresh_expired_token_raises_401(self) -> None:
         """Refresh with expired token should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
         settings = MagicMock()
 
         user_id = uuid4()
@@ -340,7 +351,7 @@ class TestCreateApiKey:
     @pytest.mark.asyncio
     async def test_create_api_key_success_returns_full_key(self) -> None:
         """Creating API key should return full key once."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
 
@@ -402,7 +413,7 @@ class TestCreateApiKey:
     @pytest.mark.asyncio
     async def test_create_api_key_no_team_context_raises_401(self) -> None:
         """Creating API key without team context should raise 401."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user = MagicMock(spec=UserORM)
         user.id = uuid4()
         current_user = (user, None)  # No team_id
@@ -422,7 +433,7 @@ class TestListApiKeys:
     @pytest.mark.asyncio
     async def test_list_api_keys_returns_user_keys(self) -> None:
         """Listing API keys should return all keys for authenticated user."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
 
@@ -471,7 +482,7 @@ class TestRevokeApiKey:
     @pytest.mark.asyncio
     async def test_revoke_api_key_success_sets_inactive(self) -> None:
         """Revoking API key should set is_active=False."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
         key_id = uuid4()
@@ -502,7 +513,7 @@ class TestRevokeApiKey:
     @pytest.mark.asyncio
     async def test_revoke_api_key_not_found_raises_404(self) -> None:
         """Revoking non-existent API key should raise 404."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
         key_id = uuid4()
@@ -525,7 +536,7 @@ class TestRevokeApiKey:
     @pytest.mark.asyncio
     async def test_revoke_other_user_key_non_admin_raises_403(self) -> None:
         """Non-admin revoking another user's key should raise 403."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         other_user_id = uuid4()
         team_id = uuid4()
@@ -566,7 +577,7 @@ class TestLogout:
     @pytest.mark.asyncio
     async def test_logout_success_revokes_all_tokens(self) -> None:
         """Logout without specific token should revoke all active tokens."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
 
@@ -590,7 +601,7 @@ class TestLogout:
     @pytest.mark.asyncio
     async def test_logout_specific_token_revokes_one(self) -> None:
         """Logout with specific token should revoke only that token."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
 
@@ -636,7 +647,7 @@ class TestGetMe:
     @pytest.mark.asyncio
     async def test_me_returns_current_user(self) -> None:
         """GET /me should return authenticated user details with role."""
-        db = AsyncMock()
+        db = _mock_db_session()
         user_id = uuid4()
         team_id = uuid4()
 

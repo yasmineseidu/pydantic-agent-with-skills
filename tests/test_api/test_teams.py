@@ -36,7 +36,7 @@ class TestListTeams:
     ) -> None:
         """list_teams returns all teams the user is a member of."""
         # Mock database query result
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalars = MagicMock(
             return_value=MagicMock(all=MagicMock(return_value=[test_team]))
         )
@@ -56,7 +56,7 @@ class TestListTeams:
     ) -> None:
         """list_teams returns empty list when user has no teams."""
         # Mock database query result with empty list
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -71,7 +71,7 @@ class TestListTeams:
     ) -> None:
         """list_teams response includes all required fields."""
         # Mock database query result
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalars = MagicMock(
             return_value=MagicMock(all=MagicMock(return_value=[test_team]))
         )
@@ -192,7 +192,7 @@ class TestGetTeam:
     ) -> None:
         """get_team returns team details when user is member."""
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -215,7 +215,7 @@ class TestGetTeam:
         from fastapi import HTTPException
 
         # Mock team lookup returning None
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -233,7 +233,7 @@ class TestGetTeam:
         from fastapi import HTTPException
 
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -257,7 +257,7 @@ class TestUpdateTeam:
         team_data = TeamUpdate(name="Updated Name", settings={"max_tokens": 8000})
 
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -284,7 +284,7 @@ class TestUpdateTeam:
         team_data = TeamUpdate(name="Unauthorized Update")
 
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -312,7 +312,7 @@ class TestUpdateTeam:
 
         # Mock team lookup
         original_settings = test_team.settings.copy()
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -340,7 +340,7 @@ class TestListMembers:
     ) -> None:
         """list_members returns all team members."""
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock membership
@@ -351,7 +351,7 @@ class TestListMembers:
         mock_membership.created_at = datetime.now(timezone.utc)
 
         # Mock members query result
-        mock_members_result = AsyncMock()
+        mock_members_result = MagicMock()
         mock_members_result.all = MagicMock(return_value=[(mock_membership, test_user)])
 
         # Setup execute to return different results based on call order
@@ -393,7 +393,7 @@ class TestListMembers:
         from fastapi import HTTPException
 
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 
@@ -422,11 +422,11 @@ class TestAddMember:
         new_user.display_name = "New User"
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock user lookup
-        mock_user_result = AsyncMock()
+        mock_user_result = MagicMock()
         mock_user_result.scalar_one_or_none = MagicMock(return_value=new_user)
 
         # Setup execute to return different results
@@ -478,11 +478,11 @@ class TestAddMember:
         member_data = MemberAdd(email="nonexistent@example.com", role="member")
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock user lookup returning None
-        mock_user_result = AsyncMock()
+        mock_user_result = MagicMock()
         mock_user_result.scalar_one_or_none = MagicMock(return_value=None)
 
         # Setup execute
@@ -526,11 +526,11 @@ class TestAddMember:
         existing_user.email = "existing@example.com"
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock user lookup
-        mock_user_result = AsyncMock()
+        mock_user_result = MagicMock()
         mock_user_result.scalar_one_or_none = MagicMock(return_value=existing_user)
 
         # Setup execute
@@ -581,11 +581,11 @@ class TestRemoveMember:
         mock_membership.role = UserRole.MEMBER.value
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock membership lookup
-        mock_membership_result = AsyncMock()
+        mock_membership_result = MagicMock()
         mock_membership_result.scalar_one_or_none = MagicMock(return_value=mock_membership)
 
         # Setup execute
@@ -632,11 +632,11 @@ class TestRemoveMember:
         mock_membership.role = UserRole.OWNER.value
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock membership lookup
-        mock_membership_result = AsyncMock()
+        mock_membership_result = MagicMock()
         mock_membership_result.scalar_one_or_none = MagicMock(return_value=mock_membership)
 
         # Setup execute
@@ -675,11 +675,11 @@ class TestRemoveMember:
         nonexistent_member = UUID("55555555-5555-5555-5555-555555555555")
 
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock membership lookup returning None
-        mock_membership_result = AsyncMock()
+        mock_membership_result = MagicMock()
         mock_membership_result.scalar_one_or_none = MagicMock(return_value=None)
 
         # Setup execute
@@ -718,7 +718,7 @@ class TestGetUsage:
     ) -> None:
         """get_usage returns aggregated usage statistics."""
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock usage aggregation result
@@ -731,7 +731,7 @@ class TestGetUsage:
         mock_usage_row.period_start = datetime(2026, 2, 1, tzinfo=timezone.utc)
         mock_usage_row.period_end = datetime(2026, 2, 10, tzinfo=timezone.utc)
 
-        mock_usage_result = AsyncMock()
+        mock_usage_result = MagicMock()
         mock_usage_result.one = MagicMock(return_value=mock_usage_row)
 
         # Setup execute
@@ -773,7 +773,7 @@ class TestGetUsage:
     ) -> None:
         """get_usage returns zero stats when no usage logs exist."""
         # Mock team lookup
-        mock_team_result = AsyncMock()
+        mock_team_result = MagicMock()
         mock_team_result.scalar_one_or_none = MagicMock(return_value=test_team)
 
         # Mock usage aggregation with zero values
@@ -786,7 +786,7 @@ class TestGetUsage:
         mock_usage_row.period_start = None
         mock_usage_row.period_end = None
 
-        mock_usage_result = AsyncMock()
+        mock_usage_result = MagicMock()
         mock_usage_result.one = MagicMock(return_value=mock_usage_row)
 
         # Setup execute
@@ -831,7 +831,7 @@ class TestGetUsage:
         from fastapi import HTTPException
 
         # Mock team lookup
-        mock_result = AsyncMock()
+        mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=test_team)
         db_session.execute = AsyncMock(return_value=mock_result)
 

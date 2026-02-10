@@ -17,11 +17,14 @@ async def fake_redis() -> AsyncGenerator[FakeAsyncRedis, None]:
     client = FakeAsyncRedis(decode_responses=True)
     yield client
     await client.flushall()
+    pool = getattr(client, "connection_pool", None)
+    if pool is not None:
+        await pool.disconnect(inuse_connections=True)
     await client.aclose()
 
 
 @pytest.fixture
-def redis_manager(fake_redis: FakeAsyncRedis):
+async def redis_manager(fake_redis: FakeAsyncRedis) -> AsyncGenerator:
     """RedisManager with injected fakeredis client (bypasses pool creation).
 
     Creates a RedisManager configured with a fake URL, then patches its
@@ -38,7 +41,8 @@ def redis_manager(fake_redis: FakeAsyncRedis):
     manager = RedisManager(redis_url="redis://fake:6379/0", key_prefix="test:")
     manager._client = fake_redis
     manager._available = True
-    return manager
+    yield manager
+    await manager.close()
 
 
 @pytest.fixture

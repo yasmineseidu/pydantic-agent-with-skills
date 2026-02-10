@@ -122,6 +122,7 @@ def mock_session() -> AsyncMock:
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     session.close = AsyncMock()
+    session.add = MagicMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
     # Support async context manager protocol

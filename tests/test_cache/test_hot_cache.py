@@ -348,7 +348,8 @@ class TestInvalidate:
 class TestKeyFormat:
     """Tests for HotMemoryCache._key."""
 
-    def test_cache_key_format(self, redis_manager: RedisManager, key_prefix: str) -> None:
+    @pytest.mark.asyncio
+    async def test_cache_key_format(self, redis_manager: RedisManager, key_prefix: str) -> None:
         """Test cache key format is {prefix}hot:{agent_id}:{user_id}."""
         cache = HotMemoryCache(redis_manager)
         agent_id = uuid4()

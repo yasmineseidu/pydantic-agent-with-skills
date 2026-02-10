@@ -633,6 +633,8 @@ class TestSSELifecycle:
             await _consume_sse_events(result)
 
         mock_create_task.assert_called_once()
+        scheduled_coro = mock_create_task.call_args.args[0]
+        scheduled_coro.close()
 
     @pytest.mark.asyncio
     async def test_requires_team_context(self, test_user: UserORM) -> None:
@@ -691,6 +693,7 @@ class TestSSEIntegrationBasic:
                 "/v1/agents/test-streamer/chat/stream",
                 json={"message": "Hello"},
             )
+            await response.aread()
 
         assert response.headers["content-type"].startswith("text/event-stream")
 
@@ -754,6 +757,7 @@ class TestSSEIntegrationBasic:
                 "/v1/agents/test-streamer/chat/stream",
                 json={"message": "Backward compat test"},
             )
+            await response.aread()
 
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -789,6 +793,7 @@ class TestSSEIntegrationBasic:
                 "/v1/agents/test-streamer/chat/stream/advanced",
                 json={"message": "Advanced test"},
             )
+            await response.aread()
 
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
@@ -1535,7 +1540,10 @@ class TestPhase5Regression:
         mock_result.output = "Hello from agent"
         mock_result.usage = MagicMock(return_value=MagicMock(input_tokens=10, output_tokens=5))
 
-        with patch("src.api.routers.chat.skill_agent") as mock_agent:
+        with (
+            patch("src.api.routers.chat.skill_agent") as mock_agent,
+            patch("src.api.routers.chat.create_skill_agent", return_value=mock_agent),
+        ):
             mock_agent.run = AsyncMock(return_value=mock_result)
 
             result = await chat_module.chat(
