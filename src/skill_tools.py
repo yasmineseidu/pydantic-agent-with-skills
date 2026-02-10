@@ -94,9 +94,7 @@ async def read_skill_file(
 
     if skill_name not in skill_loader.skills:
         available = list(skill_loader.skills.keys())
-        logger.warning(
-            f"read_skill_file_not_found: skill_name={skill_name}, available={available}"
-        )
+        logger.warning(f"read_skill_file_not_found: skill_name={skill_name}, available={available}")
         return f"Error: Skill '{skill_name}' not found. Available skills: {available}"
 
     skill = skill_loader.skills[skill_name]
@@ -112,18 +110,16 @@ async def read_skill_file(
                 f"read_skill_file_security_violation: skill_name={skill_name}, "
                 f"file_path={file_path}, attempted_path={resolved_target}"
             )
-            return f"Error: Access denied - file must be within skill directory"
+            return "Error: Access denied - file must be within skill directory"
     except ValueError:
         # is_relative_to raises ValueError on Windows in some cases
         logger.warning(
             f"read_skill_file_path_error: skill_name={skill_name}, file_path={file_path}"
         )
-        return f"Error: Invalid file path"
+        return "Error: Invalid file path"
 
     if not target_file.exists():
-        logger.warning(
-            f"read_skill_file_not_found: skill_name={skill_name}, file_path={file_path}"
-        )
+        logger.warning(f"read_skill_file_not_found: skill_name={skill_name}, file_path={file_path}")
         return f"Error: File not found: {file_path}"
 
     if not target_file.is_file():
@@ -142,8 +138,7 @@ async def read_skill_file(
 
     except Exception as e:
         logger.exception(
-            f"read_skill_file_error: skill_name={skill_name}, "
-            f"file_path={file_path}, error={str(e)}"
+            f"read_skill_file_error: skill_name={skill_name}, file_path={file_path}, error={str(e)}"
         )
         return f"Error reading file '{file_path}': {str(e)}"
 
@@ -195,12 +190,12 @@ async def list_skill_files(
                     f"list_skill_files_security_violation: skill_name={skill_name}, "
                     f"directory={directory}"
                 )
-                return f"Error: Access denied - directory must be within skill directory"
+                return "Error: Access denied - directory must be within skill directory"
         except ValueError:
             logger.warning(
                 f"list_skill_files_path_error: skill_name={skill_name}, directory={directory}"
             )
-            return f"Error: Invalid directory path"
+            return "Error: Invalid directory path"
 
     if not target_dir.exists():
         logger.warning(

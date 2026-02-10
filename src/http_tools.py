@@ -59,10 +59,9 @@ async def http_get(
 
             # Handle rate limiting with retry
             if response.status_code == 429:
-                delay = RETRY_BASE_DELAY * (2 ** attempt)  # Exponential backoff
+                delay = RETRY_BASE_DELAY * (2**attempt)  # Exponential backoff
                 logger.warning(
-                    f"http_get_rate_limited: url={url}, attempt={attempt + 1}, "
-                    f"retrying in {delay}s"
+                    f"http_get_rate_limited: url={url}, attempt={attempt + 1}, retrying in {delay}s"
                 )
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(delay)
@@ -72,9 +71,7 @@ async def http_get(
 
             # Check for other HTTP errors (no retry)
             if response.status_code >= 400:
-                logger.warning(
-                    f"http_get_error: url={url}, status={response.status_code}"
-                )
+                logger.warning(f"http_get_error: url={url}, status={response.status_code}")
                 return f"Error: HTTP {response.status_code} - {response.reason_phrase}"
 
             # Try to parse as JSON for nicer formatting
@@ -151,17 +148,11 @@ async def http_post(
             if "content-type" not in {k.lower() for k in request_headers}:
                 request_headers["Content-Type"] = "application/json"
 
-        response = await client.post(
-            url,
-            content=body,
-            headers=request_headers
-        )
+        response = await client.post(url, content=body, headers=request_headers)
 
         # Check for HTTP errors
         if response.status_code >= 400:
-            logger.warning(
-                f"http_post_error: url={url}, status={response.status_code}"
-            )
+            logger.warning(f"http_post_error: url={url}, status={response.status_code}")
             return f"Error: HTTP {response.status_code} - {response.reason_phrase}\n{response.text}"
 
         # Try to parse as JSON for nicer formatting

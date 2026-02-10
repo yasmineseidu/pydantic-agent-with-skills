@@ -82,9 +82,7 @@ class SkillLoader:
 
         return "\n".join(lines)
 
-    def _parse_skill_metadata(
-        self, skill_md: Path, skill_dir: Path
-    ) -> Optional[SkillMetadata]:
+    def _parse_skill_metadata(self, skill_md: Path, skill_dir: Path) -> Optional[SkillMetadata]:
         """
         Extract YAML frontmatter from SKILL.md.
 

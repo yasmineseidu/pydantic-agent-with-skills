@@ -33,13 +33,13 @@ def extract_tool_calls(result: Any) -> list[tuple[str, dict]]:
     tool_calls = []
 
     for msg in result.all_messages():
-        if hasattr(msg, 'parts'):
+        if hasattr(msg, "parts"):
             for part in msg.parts:
-                if hasattr(part, 'part_kind') and part.part_kind == 'tool-call':
+                if hasattr(part, "part_kind") and part.part_kind == "tool-call":
                     tool_name = part.tool_name
                     # Extract args - use args_as_dict() method
                     args = {}
-                    if hasattr(part, 'args_as_dict'):
+                    if hasattr(part, "args_as_dict"):
                         args = part.args_as_dict()
                     tool_calls.append((tool_name, args))
 
@@ -63,8 +63,8 @@ async def run_agent_task(inputs: str) -> dict[str, Any]:
     tool_calls = extract_tool_calls(result)
 
     return {
-        'response': result.output,
-        'tools_called': tool_calls,
+        "response": result.output,
+        "tools_called": tool_calls,
     }
 
 
@@ -79,13 +79,13 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
     Returns:
         Exit code (0 = success, 1 = failures)
     """
-    evals_dir = Path('tests/evals')
+    evals_dir = Path("tests/evals")
 
     # Select datasets to run
     if dataset_name:
-        yaml_files = [evals_dir / f'{dataset_name}.yaml']
+        yaml_files = [evals_dir / f"{dataset_name}.yaml"]
     else:
-        yaml_files = list(evals_dir.glob('*.yaml'))
+        yaml_files = list(evals_dir.glob("*.yaml"))
 
     print("\n" + "=" * 60)
     print("RUNNING EVALUATIONS")
@@ -99,7 +99,6 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
         if not yaml_file.exists():
             print(f"\n[WARNING] Skipping {yaml_file.name} - not found")
             continue
-
 
         print(f"\n{'=' * 60}")
         print(f"Running: {yaml_file.stem}")
@@ -177,7 +176,11 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
                 total_cases += 1
                 all_passed = False
                 # Try different attributes for error message
-                error_msg = getattr(failure, 'error', None) or getattr(failure, 'message', None) or str(failure)
+                error_msg = (
+                    getattr(failure, "error", None)
+                    or getattr(failure, "message", None)
+                    or str(failure)
+                )
                 print(f"[ERROR] {failure.name}: {error_msg}")
 
             print("-" * 60)
@@ -188,6 +191,7 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
             all_passed = False
             if verbose:
                 import traceback
+
                 traceback.print_exc()
 
     print("\n" + "=" * 60)
@@ -199,10 +203,10 @@ async def run_evals(dataset_name: str = None, verbose: bool = False) -> int:
     return 0 if all_passed else 1
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Run skill agent evaluations')
-    parser.add_argument('--dataset', help='Specific dataset to run')
-    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run skill agent evaluations")
+    parser.add_argument("--dataset", help="Specific dataset to run")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
     exit_code = asyncio.run(run_evals(args.dataset, args.verbose))

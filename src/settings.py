@@ -2,12 +2,31 @@
 
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from dotenv import load_dotenv
 from typing import Optional, Literal
 
 # Load environment variables from .env file
 load_dotenv()
+
+
+class FeatureFlags(BaseModel):
+    """Simple boolean feature flags via environment variables.
+
+    Controls which platform features are active. Each flag maps to
+    a FEATURE_FLAGS__<FLAG_NAME> environment variable.
+    """
+
+    enable_memory: bool = Field(default=True, description="Phase 2: Full memory system")
+    enable_compaction_shield: bool = Field(
+        default=True, description="Phase 2: Double-pass extraction"
+    )
+    enable_contradiction_detection: bool = Field(
+        default=True, description="Phase 2: Conflict detection"
+    )
+    enable_agent_collaboration: bool = Field(default=False, description="Phase 7: Router, handoff")
+    enable_webhooks: bool = Field(default=False, description="Phase 9: Outbound webhooks")
+    enable_integrations: bool = Field(default=False, description="Phase 9: Telegram/Slack")
 
 
 class Settings(BaseSettings):
@@ -73,6 +92,11 @@ class Settings(BaseSettings):
         default=None, description="OpenAI API key for embeddings (defaults to llm_api_key)"
     )
     embedding_dimensions: int = Field(default=1536)
+
+    # Feature Flags
+    feature_flags: FeatureFlags = Field(
+        default_factory=FeatureFlags, description="Platform feature toggles"
+    )
 
 
 def load_settings() -> Settings:

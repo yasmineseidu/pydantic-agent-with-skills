@@ -2,7 +2,6 @@
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from dataclasses import dataclass, field
 from typing import Optional, Dict
 
@@ -15,9 +14,9 @@ def get_agent_tools() -> Dict[str, any]:
     """Get all registered tools from the agent (including toolsets)."""
     all_tools = {}
     for toolset in skill_agent.toolsets:
-        if hasattr(toolset, 'tools'):
+        if hasattr(toolset, "tools"):
             all_tools.update(toolset.tools)
-        if hasattr(toolset, '_tools'):
+        if hasattr(toolset, "_tools"):
             all_tools.update(toolset._tools)
     return all_tools
 
@@ -210,7 +209,10 @@ class TestSkillDiscoveryIntegration:
 
         assert code_review_skill is not None
         assert code_review_skill.name == "code_review"
-        assert "review" in code_review_skill.description.lower() or "code" in code_review_skill.description.lower()
+        assert (
+            "review" in code_review_skill.description.lower()
+            or "code" in code_review_skill.description.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_research_assistant_skill_has_correct_metadata(self) -> None:

@@ -1,12 +1,32 @@
 """Dependencies for Skill-Based Agent."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 import logging
 from pathlib import Path
 
 from src.skill_loader import SkillLoader
 from src.settings import load_settings
+
+if TYPE_CHECKING:
+    # Phase 2: Memory system imports
+    from src.memory.embedding import EmbeddingService
+    from src.db.repositories.memory_repo import MemoryRepository
+    from src.memory.memory_log import MemoryAuditLog
+    from src.memory.contradiction import ContradictionDetector
+    from src.memory.tier_manager import TierManager
+    from src.memory.token_budget import TokenBudgetManager
+    from src.memory.retrieval import MemoryRetriever
+    from src.memory.storage import MemoryExtractor
+    from src.memory.compaction_shield import CompactionShield
+    from src.memory.prompt_builder import MemoryPromptBuilder
+
+    # Phase 2: MoE routing imports
+    from src.moe.complexity_scorer import QueryComplexityScorer
+    from src.moe.model_router import ModelRouter
+    from src.moe.cost_guard import CostGuard
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +44,23 @@ class AgentDependencies:
 
     # Configuration
     settings: Optional[Any] = None
+
+    # Memory system (Phase 2 - initialized externally)
+    embedding_service: Optional["EmbeddingService"] = None
+    memory_repo: Optional["MemoryRepository"] = None
+    audit_log: Optional["MemoryAuditLog"] = None
+    contradiction_detector: Optional["ContradictionDetector"] = None
+    tier_manager: Optional["TierManager"] = None
+    token_budget: Optional["TokenBudgetManager"] = None
+    memory_retriever: Optional["MemoryRetriever"] = None
+    memory_extractor: Optional["MemoryExtractor"] = None
+    compaction_shield: Optional["CompactionShield"] = None
+    prompt_builder: Optional["MemoryPromptBuilder"] = None
+
+    # MoE routing (Phase 2 - initialized externally)
+    complexity_scorer: Optional["QueryComplexityScorer"] = None
+    model_router: Optional["ModelRouter"] = None
+    cost_guard: Optional["CostGuard"] = None
 
     async def initialize(self) -> None:
         """

@@ -2,9 +2,8 @@
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, MagicMock
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Optional
 
 from src.skill_tools import load_skill, read_skill_file, list_skill_files
 from src.skill_loader import SkillLoader, SkillMetadata

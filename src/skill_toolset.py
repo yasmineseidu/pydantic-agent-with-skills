@@ -10,10 +10,7 @@ skill_tools = FunctionToolset()
 
 
 @skill_tools.tool
-async def load_skill_tool(
-    ctx: RunContext[AgentDependencies],
-    skill_name: str
-) -> str:
+async def load_skill_tool(ctx: RunContext[AgentDependencies], skill_name: str) -> str:
     """
     Load the full instructions for a skill (Level 2 progressive disclosure).
 
@@ -33,9 +30,7 @@ async def load_skill_tool(
 
 @skill_tools.tool
 async def read_skill_file_tool(
-    ctx: RunContext[AgentDependencies],
-    skill_name: str,
-    file_path: str
+    ctx: RunContext[AgentDependencies], skill_name: str, file_path: str
 ) -> str:
     """
     Read a file from a skill's directory (Level 3 progressive disclosure).
@@ -57,9 +52,7 @@ async def read_skill_file_tool(
 
 @skill_tools.tool
 async def list_skill_files_tool(
-    ctx: RunContext[AgentDependencies],
-    skill_name: str,
-    directory: str = ""
+    ctx: RunContext[AgentDependencies], skill_name: str, directory: str = ""
 ) -> str:
     """
     List files available in a skill's directory.

@@ -21,11 +21,11 @@ def get_llm_model() -> Union[OpenAIChatModel, OpenRouterModel]:
     settings = load_settings()
     provider = settings.llm_provider
 
-    if provider == 'openrouter':
+    if provider == "openrouter":
         return _create_openrouter_model(settings)
-    elif provider == 'openai':
+    elif provider == "openai":
         return _create_openai_model(settings)
-    elif provider == 'ollama':
+    elif provider == "ollama":
         return _create_ollama_model(settings)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
@@ -78,8 +78,8 @@ def _create_ollama_model(settings: Settings) -> OpenAIChatModel:
         Configured Ollama model via OpenAI provider
     """
     provider = OpenAIProvider(
-        base_url=settings.llm_base_url or 'http://localhost:11434/v1',
-        api_key='ollama'  # Required but unused by Ollama
+        base_url=settings.llm_base_url or "http://localhost:11434/v1",
+        api_key="ollama",  # Required but unused by Ollama
     )
     return OpenAIChatModel(settings.llm_model, provider=provider)
 
