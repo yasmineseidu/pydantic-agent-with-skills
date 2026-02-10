@@ -28,6 +28,7 @@ class FeatureFlags(BaseModel):
     enable_webhooks: bool = Field(default=False, description="Phase 9: Outbound webhooks")
     enable_integrations: bool = Field(default=False, description="Phase 9: Telegram/Slack")
     enable_redis_cache: bool = Field(default=False, description="Phase 3: Redis caching layer")
+    enable_api: bool = Field(default=False, description="Phase 4: FastAPI REST API")
 
 
 class Settings(BaseSettings):
@@ -99,6 +100,32 @@ class Settings(BaseSettings):
         default=None, description="Redis connection URL (redis://localhost:6379/0)"
     )
     redis_key_prefix: str = Field(default="ska:", description="Redis key namespace prefix")
+
+    # JWT Authentication (Phase 4)
+    jwt_secret_key: Optional[str] = Field(default=None, description="Secret key for JWT signing")
+    jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+    jwt_access_token_expire_minutes: int = Field(
+        default=30, ge=1, description="Access token expiry in minutes"
+    )
+    jwt_refresh_token_expire_days: int = Field(
+        default=7, ge=1, description="Refresh token expiry in days"
+    )
+
+    # Admin Bootstrap (Phase 4)
+    admin_email: Optional[str] = Field(default=None, description="Bootstrap admin email")
+    admin_password: Optional[str] = Field(default=None, description="Bootstrap admin password")
+
+    # CORS (Phase 4)
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:3000"], description="CORS allowed origins"
+    )
+
+    # Langfuse Observability (Phase 4)
+    langfuse_public_key: Optional[str] = Field(
+        default=None, description="Langfuse public key for LLM tracing"
+    )
+    langfuse_secret_key: Optional[str] = Field(default=None, description="Langfuse secret key")
+    langfuse_host: Optional[str] = Field(default=None, description="Langfuse host URL")
 
     # Feature Flags
     feature_flags: FeatureFlags = Field(

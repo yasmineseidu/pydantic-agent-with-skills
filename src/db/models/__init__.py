@@ -1,6 +1,7 @@
 """ORM models for database tables."""
 
 from src.db.models.agent import AgentORM, AgentStatusEnum
+from src.db.models.auth import ApiKeyORM, RefreshTokenORM
 from src.db.models.conversation import (
     ConversationORM,
     ConversationStatusEnum,
@@ -16,11 +17,14 @@ from src.db.models.memory import (
     MemoryTierEnum,
     MemoryTypeEnum,
 )
+from src.db.models.tracking import AuditLogORM, UsageLogORM
 from src.db.models.user import TeamMembershipORM, TeamORM, UserORM, UserRole
 
 __all__ = [
     "AgentORM",
     "AgentStatusEnum",
+    "ApiKeyORM",
+    "AuditLogORM",
     "ConversationORM",
     "ConversationStatusEnum",
     "MemoryLogORM",
@@ -32,8 +36,10 @@ __all__ = [
     "MemoryTypeEnum",
     "MessageORM",
     "MessageRoleEnum",
+    "RefreshTokenORM",
     "TeamMembershipORM",
     "TeamORM",
+    "UsageLogORM",
     "UserORM",
     "UserRole",
 ]

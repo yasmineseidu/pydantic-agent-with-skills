@@ -38,6 +38,21 @@
 - PATTERN: L0/L1/L2 cache hierarchy → in-memory dict (L0) → Redis (L1) → PostgreSQL (L2)
 - PATTERN: Redis pipeline transactions → DEL + ZADD + EXPIRE atomic in hot_cache warm_cache()
 - PATTERN: token-bucket rate limiter → INCR + EXPIRE atomic, degrades to allow-all when Redis down
+- PATTERN: FastAPI CRUD pagination → `select(func.count()).select_from(query.subquery())` for total count
+- PATTERN: team-scoped queries → `WHERE team_id = current_team_id` on ALL multi-tenant endpoints
+- PATTERN: duplicate slug check → query before create, raise 409 Conflict if exists
+- PATTERN: soft delete → set status='archived', NEVER hard delete (preserve referential integrity)
+- PATTERN: FastAPI status codes → 201 Created, 204 No Content, 409 Conflict, 404 Not Found
+- PATTERN: rate limit headers → X-RateLimit-Limit, -Remaining, -Reset on success; Retry-After on 429
+- PATTERN: BaseHTTPMiddleware dispatch → add headers to response, return JSONResponse for 429
+- PATTERN: router prefixes → check if paths already have /v1/ in decorators before adding prefix in include_router
+- PATTERN: mock DB queries → `AsyncMock(spec=AsyncSession)` + `mock_result.scalar_one_or_none.return_value = obj`
+- PATTERN: patch side_effect for multiple queries → `db.execute.side_effect = [result1, result2]`
+- PATTERN: import router module directly → `import src.api.routers.auth as auth_router` avoids __init__.py router init
+- PATTERN: SA stmt variable reuse → use distinct names per model (`api_key_stmt`, `membership_stmt`, `user_stmt`)
+- PATTERN: fastapi.status alias → `from fastapi import status as http_status` when param named `status` exists
+- PATTERN: Starlette call_next typing → `response: Response = await call_next(request)` fixes no-any-return
+- PATTERN: Request.url.path → Starlette Request has no `.path`, use `.url.path` instead
 
 ## Gotchas
 
@@ -57,6 +72,17 @@
 - GOTCHA: fakeredis TTL timing → `assert 86399 <= ttl <= 86400` not exact equality (1s drift)
 - GOTCHA: httpx code fence parsing → LLMs wrap JSON in ```json...```, must strip before json.loads
 - GOTCHA: tier_manager demotion → never demote identity type, pinned, or importance >= 8
+- GOTCHA: router double-prefix → most routers have /v1/* in @router.get() paths, don't add prefix in include_router
+- GOTCHA: middleware rate_limiter → initialized in lifespan, passed to middleware via app.add_middleware()
+- GOTCHA: complex ORM mocking → patching ORM constructors interferes with SQLAlchemy select(), skip or use integration tests
+- GOTCHA: router __init__.py imports → importing from src.api.routers triggers ALL router init, import module directly instead
+- GOTCHA: FastAPI test conftest → override_get_db MUST yield shared db_session fixture, not create its own mock
+- GOTCHA: require_role Depends() → bare `Depends()` exposes AsyncSession __init__ params as query fields → override AsyncSession in DI
+- GOTCHA: get_current_user global override → prevents 401 testing, pop override in no-auth tests
+- GOTCHA: status param shadows fastapi.status → `list_memories(status: str)` shadows `from fastapi import status`
+- GOTCHA: AsyncMock vs MagicMock for SA Result → `.scalar_one_or_none()` is SYNC, use MagicMock not AsyncMock
+- GOTCHA: db.refresh side_effect → create endpoint + flush + refresh needs mock that populates id/created_at
+- GOTCHA: test_table_count → when adding new ORM models, update assertion from 9 → 13 (import-order dependent)
 
 ## Architecture
 
@@ -70,6 +96,7 @@
 - DECISION: CostGuard uses asyncio.Lock → in-memory daily/monthly budget tracking, no DB needed
 - DECISION: Phase 3 Redis → feature-flagged `enable_redis_cache`, 4 cache modules, 86 new tests
 - DECISION: Redis integration opt-in → `hot_cache` and `redis_cache` params default to None
+- DECISION: Phase 4 Auth+API → FastAPI app factory, JWT+API key dual auth, 4 new ORM models, 7 routers, ~244 new tests
 
 ## Useful Grep Patterns
 
@@ -91,3 +118,9 @@
 - 2026-02-09 phase2-build: 24 tasks, 7 waves, 21 agents deployed, 445 tests (273 new), 0 failures
 - 2026-02-09 phase2-commit: 106df03 pushed to main, 49 files changed, 11232 lines added
 - 2026-02-09 phase3-build: 18 tasks, 6 waves, ~12 agents deployed, 531 tests (86 new), 0 failures
+- 2026-02-10 phase4-agents-router: src/api/routers/agents.py, 5 endpoints, 645 tests pass
+- 2026-02-10 phase4-health: health check router (GET /health, GET /ready), 14 new tests, 645 total pass
+- 2026-02-10 phase4-router-registration: all 7 routers wired, rate limit middleware, 36 routes, 645 tests pass
+- 2026-02-10 phase4-auth-tests: tests/test_api/test_auth.py, 17 tests (16 pass, 1 skip), 709 total pass
+- 2026-02-10 phase4-test-fixes: fixed 62 test failures across 4 files, 4 parallel bugsy agents, 775 tests pass
+- 2026-02-10 phase4.1-mypy: fixed 51 mypy errors across 8 files, 6 parallel builder agents, 0 Phase 4 mypy errors remain
