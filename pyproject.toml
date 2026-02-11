@@ -24,6 +24,9 @@ dependencies = [
     "python-multipart~=0.0.17",
     "langfuse>=2.1.0",
     "celery[redis]~=5.4.0",
+    # Phase 9: Platform integrations
+    "python-telegram-bot>=21.0,<22.0",
+    "slack-sdk>=3.27,<4.0",
 ]
 
 [project.optional-dependencies]

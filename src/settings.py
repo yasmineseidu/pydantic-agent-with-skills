@@ -136,6 +136,20 @@ class Settings(BaseSettings):
     langfuse_secret_key: Optional[str] = Field(default=None, description="Langfuse secret key")
     langfuse_host: Optional[str] = Field(default=None, description="Langfuse host URL")
 
+    # Platform Integration Credentials (Phase 9)
+    telegram_bot_token: Optional[str] = Field(
+        default=None, description="Telegram bot token (per-connection, encrypted in DB)"
+    )
+    slack_signing_secret: Optional[str] = Field(
+        default=None, description="Slack signing secret for webhook validation"
+    )
+    slack_bot_token: Optional[str] = Field(
+        default=None, description="Slack bot token for API calls (xoxb-...)"
+    )
+    webhook_signing_secret: Optional[str] = Field(
+        default=None, description="HMAC secret for signing outbound webhooks"
+    )
+
     # Feature Flags
     feature_flags: FeatureFlags = Field(
         default_factory=FeatureFlags, description="Platform feature toggles"

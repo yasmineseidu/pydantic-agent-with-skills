@@ -156,6 +156,7 @@ def create_app() -> FastAPI:
         health_router,
         memories_router,
         teams_router,
+        webhooks_router,
     )
 
     # Health checks (no prefix, paths start with /health and /ready)
@@ -170,11 +171,12 @@ def create_app() -> FastAPI:
     app.include_router(memories_router, tags=["memories"])
     app.include_router(conversations_router, tags=["conversations"])
     app.include_router(collaboration_router, tags=["collaboration"])
+    app.include_router(webhooks_router, tags=["webhooks"])
 
     # Chat endpoint (path is /{agent_slug}/chat, needs /v1/agents prefix)
     app.include_router(chat_router, prefix="/v1/agents", tags=["chat"])
 
     logger.info(
-        "app_created: title=Skill Agent API, version=0.1.0, routers=7, middleware=rate_limit"
+        "app_created: title=Skill Agent API, version=0.1.0, routers=8, middleware=rate_limit"
     )
     return app

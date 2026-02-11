@@ -18,6 +18,12 @@ from src.db.models.conversation import (
     MessageORM,
     MessageRoleEnum,
 )
+from src.db.models.platform import (
+    PlatformConnectionORM,
+    PlatformStatusEnum,
+    PlatformTypeEnum,
+    WebhookDeliveryLogORM,
+)
 from src.db.models.memory import (
     MemoryLogORM,
     MemoryORM,
@@ -54,6 +60,9 @@ __all__ = [
     "MessageORM",
     "MessageRoleEnum",
     "ParticipantRoleEnum",
+    "PlatformConnectionORM",
+    "PlatformStatusEnum",
+    "PlatformTypeEnum",
     "RefreshTokenORM",
     "RoutingDecisionLogORM",
     "ScheduledJobORM",
@@ -62,4 +71,5 @@ __all__ = [
     "UsageLogORM",
     "UserORM",
     "UserRole",
+    "WebhookDeliveryLogORM",
 ]
