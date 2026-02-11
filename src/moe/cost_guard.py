@@ -31,6 +31,30 @@ class CostGuard:
         self._monthly_counters: dict[str, float] = {}
         self._lock: asyncio.Lock = asyncio.Lock()
 
+    def _cleanup_stale_counters(self) -> None:
+        """Remove counter keys from previous days/months to prevent unbounded growth.
+
+        Must be called while holding self._lock. Uses UTC to match key
+        generation in check_budget() and record_cost().
+        """
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        this_month = now.strftime("%Y-%m")
+
+        stale_daily = [k for k in self._daily_counters if not k.endswith(today)]
+        for k in stale_daily:
+            del self._daily_counters[k]
+
+        stale_monthly = [k for k in self._monthly_counters if not k.endswith(this_month)]
+        for k in stale_monthly:
+            del self._monthly_counters[k]
+
+        if stale_daily or stale_monthly:
+            logger.info(
+                f"cost_guard_cleanup: pruned_daily={len(stale_daily)}, "
+                f"pruned_monthly={len(stale_monthly)}"
+            )
+
     async def check_budget(
         self,
         user_id: str,
@@ -49,12 +73,12 @@ class CostGuard:
             remaining budget, and an optional suggested cheaper tier.
         """
         async with self._lock:
+            self._cleanup_stale_counters()
             now = datetime.now(timezone.utc)
 
             daily_key = f"{user_id}:{now.strftime('%Y-%m-%d')}"
             monthly_key = f"{team_id}:{now.strftime('%Y-%m')}"
 
-            # Prune stale keys (implicit reset at day/month boundary)
             daily_spent = self._daily_counters.get(daily_key, 0.0)
             monthly_spent = self._monthly_counters.get(monthly_key, 0.0)
 
@@ -113,6 +137,7 @@ class CostGuard:
             cost: Actual cost in USD to record.
         """
         async with self._lock:
+            self._cleanup_stale_counters()
             now = datetime.now(timezone.utc)
 
             daily_key = f"{user_id}:{now.strftime('%Y-%m-%d')}"

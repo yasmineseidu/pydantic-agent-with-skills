@@ -4,20 +4,35 @@ import hashlib
 import hmac
 import json
 import time
-from unittest.mock import MagicMock, patch
+from typing import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.dependencies import get_db
 from src.api.routers.webhooks import router
 
 
 @pytest.fixture()
-def app() -> FastAPI:
-    """Create test FastAPI app with webhook router."""
+def mock_db() -> AsyncMock:
+    """Create mock async database session."""
+    return AsyncMock(spec=AsyncSession)
+
+
+@pytest.fixture()
+def app(mock_db: AsyncMock) -> FastAPI:
+    """Create test FastAPI app with webhook router and mocked DB."""
     app = FastAPI()
     app.include_router(router)
+
+    async def override_get_db() -> AsyncGenerator[AsyncMock, None]:
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
     return app
 
 
@@ -30,10 +45,17 @@ def client(app: FastAPI) -> TestClient:
 class TestTelegramE2EFlow:
     """End-to-end tests for Telegram webhook flow."""
 
-    def test_telegram_full_flow(self, client: TestClient) -> None:
+    def test_telegram_full_flow(self, client: TestClient, mock_db: AsyncMock) -> None:
         """Test full Telegram flow: webhook receive, parse, dispatch."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         payload = {
             "update_id": 123,
@@ -59,10 +81,19 @@ class TestTelegramE2EFlow:
                 assert response.json()["status"] == "ok"
                 mock_task.delay.assert_called_once()
 
-    def test_telegram_celery_unavailable_still_200(self, client: TestClient) -> None:
+    def test_telegram_celery_unavailable_still_200(
+        self, client: TestClient, mock_db: AsyncMock
+    ) -> None:
         """Test Telegram returns 200 even if Celery dispatch fails."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         payload = {
             "update_id": 1,
@@ -122,25 +153,41 @@ class TestSlackE2EFlow:
 
     def test_slack_url_verification_flow(self, client: TestClient) -> None:
         """Test Slack URL verification challenge flow."""
-        mock_settings = MagicMock()
-        mock_settings.feature_flags.enable_integrations = True
+        signing_secret = "test_signing_secret_e2e"
+        timestamp = str(int(time.time()))
 
         payload = {
             "type": "url_verification",
             "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P",
             "token": "test_token",
         }
+        body = json.dumps(payload).encode()
+
+        # Generate valid Slack signature
+        base_string = f"v0:{timestamp}:".encode() + body
+        computed = hmac.new(signing_secret.encode(), base_string, hashlib.sha256).hexdigest()
+        signature = f"v0={computed}"
+
+        mock_settings = MagicMock()
+        mock_settings.feature_flags.enable_integrations = True
+        mock_settings.slack_signing_secret = signing_secret
 
         with patch("src.api.routers.webhooks.load_settings", return_value=mock_settings):
             response = client.post(
                 "/v1/webhooks/slack",
-                content=json.dumps(payload).encode(),
+                content=body,
+                headers={
+                    "X-Slack-Request-Timestamp": timestamp,
+                    "X-Slack-Signature": signature,
+                },
             )
             assert response.status_code == 200
             data = response.json()
             assert data["challenge"] == payload["challenge"]
 
-    def test_slack_event_callback_flow(self, client: TestClient) -> None:
+    def test_slack_event_callback_flow(
+        self, client: TestClient, mock_db: AsyncMock
+    ) -> None:
         """Test Slack event callback full flow with signature validation."""
         signing_secret = "test_signing_secret_e2e"
         timestamp = str(int(time.time()))
@@ -166,6 +213,13 @@ class TestSlackE2EFlow:
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
         mock_settings.slack_signing_secret = signing_secret
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         with patch("src.api.routers.webhooks.load_settings", return_value=mock_settings):
             with patch("workers.tasks.platform_tasks.handle_platform_message") as mock_task:
@@ -274,7 +328,7 @@ class TestAdapterParsingE2E:
             credentials={"bot_token": "xoxb-123", "signing_secret": "abc"},
         )
 
-        with patch("integrations.slack.adapter.WebClient"):
+        with patch("integrations.slack.adapter.AsyncWebClient"):
             adapter = SlackAdapter(config)
 
         payload = {
@@ -323,7 +377,7 @@ class TestAdapterParsingE2E:
             credentials={"bot_token": "xoxb-123", "signing_secret": "abc"},
         )
 
-        with patch("integrations.slack.adapter.WebClient"):
+        with patch("integrations.slack.adapter.AsyncWebClient"):
             adapter = SlackAdapter(config)
 
         with pytest.raises(ValueError, match="Unsupported Slack event type"):

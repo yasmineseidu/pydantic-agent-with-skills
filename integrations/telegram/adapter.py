@@ -1,6 +1,7 @@
 """Telegram Bot API adapter implementation."""
 
 import logging
+import re
 from typing import Optional
 
 from fastapi import Request
@@ -126,8 +127,8 @@ class TelegramAdapter(PlatformAdapter):
         Returns:
             MarkdownV2 formatted text.
         """
-        special_chars = r"_*[]()~`>#+-=|{}.!"
-        escaped_text: str = text
-        for char in special_chars:
-            escaped_text = escaped_text.replace(char, f"\\{char}")
-        return escaped_text
+        special_chars = r"_*[]()~`>#+=|{}.!-"
+        # First, unescape any already-escaped characters to prevent double-escaping
+        text = re.sub(r"\\([" + re.escape(special_chars) + r"])", r"\1", text)
+        # Then escape all special characters
+        return re.sub(r"([" + re.escape(special_chars) + r"])", r"\\\1", text)

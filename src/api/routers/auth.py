@@ -33,6 +33,10 @@ from src.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+# Pre-computed bcrypt hash used for constant-time login when user is not found.
+# Prevents timing side-channel that reveals whether an email exists.
+_DUMMY_HASH = "$2b$12$LJ3m4fV8aQYbKsOOcIBeQ.FldGCAhRlFledLcGOj8GRfSPdSimrMy"
+
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
@@ -169,8 +173,14 @@ async def login(
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
-    # CRITICAL: Same error for wrong password AND non-existent email (no user enumeration)
-    if not user or not verify_password(request.password, user.password_hash):
+    # CRITICAL: Always call verify_password to prevent timing-based user enumeration.
+    # bcrypt takes ~200ms; skipping it for non-existent users leaks email existence.
+    if not user:
+        verify_password(request.password, _DUMMY_HASH)
+        logger.warning(f"login_error: reason=invalid_credentials, email={request.email}")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not verify_password(request.password, user.password_hash):
         logger.warning(f"login_error: reason=invalid_credentials, email={request.email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 

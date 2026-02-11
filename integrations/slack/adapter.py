@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from fastapi import Request
-from slack_sdk import WebClient
+from slack_sdk.web.async_client import AsyncWebClient
 
 from integrations.base import PlatformAdapter
 from integrations.models import IncomingMessage, PlatformConfig
@@ -38,7 +38,7 @@ class SlackAdapter(PlatformAdapter):
             raise ValueError("Slack adapter requires 'bot_token' in credentials")
         if not self.signing_secret:
             raise ValueError("Slack adapter requires 'signing_secret' in credentials")
-        self.client = WebClient(token=self.bot_token)
+        self.client: AsyncWebClient = AsyncWebClient(token=self.bot_token)
 
     async def validate_webhook(self, request: Request) -> bool:
         """Validate Slack webhook signature.
@@ -115,7 +115,7 @@ class SlackAdapter(PlatformAdapter):
             Exception: If Web API call fails.
         """
         logger.info(f"send_response: platform=slack, channel={channel_id}")
-        self.client.chat_postMessage(
+        await self.client.chat_postMessage(
             channel=channel_id,
             text=content,
             thread_ts=thread_id,

@@ -1,16 +1,55 @@
 """HTTP request tools for the agent."""
 
 import asyncio
-import logging
-from typing import Optional, Dict, Any
+import ipaddress
 import json
+import logging
+from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
+import httpx
 from pydantic_ai import RunContext
 
-# Use httpx for async HTTP requests (comes with pydantic-ai)
-import httpx
-
 logger = logging.getLogger(__name__)
+
+# Hosts blocked to prevent SSRF attacks
+BLOCKED_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "169.254.169.254",
+    "metadata.google.internal",
+}
+
+
+def _validate_url(url: str) -> Optional[str]:
+    """Validate URL is safe for external requests.
+
+    Checks URL scheme (http/https only) and blocks access to private/internal
+    hosts to prevent SSRF attacks.
+
+    Args:
+        url: The URL to validate.
+
+    Returns:
+        Error message string if validation fails, None if URL is safe.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Error: Invalid URL scheme '{parsed.scheme}'. Only http/https allowed."
+    hostname = parsed.hostname or ""
+    if not hostname:
+        return "Error: URL has no hostname."
+    if hostname in BLOCKED_HOSTS:
+        return f"Error: Access to host '{hostname}' is blocked."
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            return f"Error: Access to private/internal IP '{hostname}' is blocked."
+    except ValueError:
+        pass  # hostname is a domain name, not an IP - that's fine
+    return None
+
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -26,6 +65,19 @@ async def get_http_client() -> httpx.AsyncClient:
     if _http_client is None:
         _http_client = httpx.AsyncClient(timeout=30.0)
     return _http_client
+
+
+async def close_http_client() -> None:
+    """Close the shared HTTP client to release resources.
+
+    Should be called during application shutdown to prevent resource leaks.
+    Safe to call multiple times or when no client has been created.
+    """
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+        logger.info("http_client_closed: shared client shut down")
 
 
 async def http_get(
@@ -48,6 +100,11 @@ async def http_get(
     Returns:
         Response body as text, or error message if request fails
     """
+    validation_error = _validate_url(url)
+    if validation_error is not None:
+        logger.warning(f"http_get_blocked: url={url}, reason={validation_error}")
+        return validation_error
+
     client = await get_http_client()
     last_error = None
 
@@ -135,6 +192,11 @@ async def http_post(
     Returns:
         Response body as text, or error message if request fails
     """
+    validation_error = _validate_url(url)
+    if validation_error is not None:
+        logger.warning(f"http_post_blocked: url={url}, reason={validation_error}")
+        return validation_error
+
     try:
         client = await get_http_client()
 

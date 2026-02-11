@@ -37,6 +37,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.settings = settings
     logger.info("app_startup: initializing resources")
 
+    # Validate JWT secret key is configured (required for all auth operations)
+    if not settings.jwt_secret_key:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be set in environment or .env file. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+        )
+
     # Initialize database engine (optional)
     engine: Optional[AsyncEngine] = None
     if settings.database_url:
@@ -132,7 +139,30 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add CORS middleware
+    # Middleware registration order: Starlette executes in LIFO (last registered = first to run).
+    # Execution order: CORS -> ErrorHandler -> RateLimit -> RequestID -> RequestLogging
+
+    # Register innermost middleware first (runs last)
+    from src.api.middleware.observability import RequestLoggingMiddleware
+
+    app.add_middleware(RequestLoggingMiddleware)
+
+    # Request ID middleware (sets request.state.request_id for downstream logging)
+    from src.api.middleware.request_id import RequestIdMiddleware
+
+    app.add_middleware(RequestIdMiddleware)
+
+    # Rate limit middleware (will be configured during lifespan)
+    from src.api.middleware.rate_limit import RateLimitMiddleware
+
+    app.add_middleware(RateLimitMiddleware, rate_limiter=None)  # Set in lifespan
+
+    # Error handling middleware (catches exceptions from all inner middleware/routes)
+    from src.api.middleware.error_handler import error_handling_middleware
+
+    app.middleware("http")(error_handling_middleware)
+
+    # CORS middleware (outermost, runs first)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -140,11 +170,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    # Add rate limit middleware (will be configured during lifespan)
-    from src.api.middleware.rate_limit import RateLimitMiddleware
-
-    app.add_middleware(RateLimitMiddleware, rate_limiter=None)  # Set in lifespan
 
     # Register routers
     from src.api.routers import (
@@ -177,6 +202,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router, prefix="/v1/agents", tags=["chat"])
 
     logger.info(
-        "app_created: title=Skill Agent API, version=0.1.0, routers=8, middleware=rate_limit"
+        "app_created: title=Skill Agent API, version=0.1.0, routers=8, "
+        "middleware=cors,error_handler,rate_limit,request_id,request_logging"
     )
     return app

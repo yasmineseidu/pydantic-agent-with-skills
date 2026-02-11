@@ -129,7 +129,7 @@ class MultiAgentManager:
                 id=session_id,
                 pattern=CollaborationPattern.DELEGATION,
                 status=CollaborationStatus.FAILED,
-                initiator_id=uuid4(),
+                initiator_id=None,
                 participants=[],
                 started_at=datetime.utcnow(),
                 metadata={"error": "Session not found"},
@@ -170,7 +170,7 @@ class MultiAgentManager:
             id=session_orm.id,
             pattern=CollaborationPattern(session_orm.session_type),
             status=CollaborationStatus(session_orm.status),
-            initiator_id=uuid4(),  # Not stored in ORM, using placeholder
+            initiator_id=None,  # Not stored in ORM
             participants=participant_infos,
             started_at=session_orm.started_at,
             completed_at=session_orm.completed_at,
@@ -202,7 +202,7 @@ class MultiAgentManager:
                 id=session_id,
                 pattern=CollaborationPattern.DELEGATION,
                 status=CollaborationStatus.FAILED,
-                initiator_id=uuid4(),
+                initiator_id=None,
                 participants=[],
                 started_at=datetime.utcnow(),
                 metadata={"error": "Session not found"},
@@ -234,7 +234,7 @@ class MultiAgentManager:
             id=session_orm.id,
             pattern=CollaborationPattern(session_orm.session_type),
             status=status,
-            initiator_id=uuid4(),  # Not stored in ORM
+            initiator_id=None,  # Not stored in ORM
             participants=[],
             started_at=session_orm.started_at,
             completed_at=session_orm.completed_at,
@@ -279,7 +279,7 @@ class MultiAgentManager:
                     id=orm.id,
                     pattern=CollaborationPattern(orm.session_type),
                     status=CollaborationStatus(orm.status),
-                    initiator_id=uuid4(),  # Not stored in ORM
+                    initiator_id=None,  # Not stored in ORM
                     participants=[],
                     started_at=orm.started_at,
                     completed_at=orm.completed_at,

@@ -1,6 +1,6 @@
 """Pydantic models for platform integration data."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -19,7 +19,7 @@ class IncomingMessage(BaseModel):
     external_channel_id: str = Field(..., description="Chat/channel/DM ID")
     text: str = Field(..., description="Message text content")
     username: Optional[str] = Field(None, description="User display name")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     thread_id: Optional[str] = Field(None, description="Thread/reply ID if applicable")
     raw_payload: dict = Field(default_factory=dict, description="Original platform payload")
 
@@ -49,5 +49,5 @@ class WebhookEvent(BaseModel):
     event_id: str = Field(..., description="Unique event ID (evt_xxx)")
     event_type: str = Field(..., description="conversation.created, message.created, etc.")
     team_id: UUID
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     payload: dict = Field(..., description="Event-specific data")

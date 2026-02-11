@@ -1,6 +1,6 @@
 """Unit tests for Slack adapter."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -220,13 +220,14 @@ class TestSlackSendResponse:
 
     @pytest.mark.asyncio
     async def test_send_calls_client(self) -> None:
-        """Test send_response calls WebClient.chat_postMessage."""
+        """Test send_response calls AsyncWebClient.chat_postMessage."""
         config = PlatformConfig(
             platform="slack",
             credentials={"bot_token": "xoxb-123", "signing_secret": "abc"},
         )
         adapter = SlackAdapter(config)
         adapter.client = MagicMock()
+        adapter.client.chat_postMessage = AsyncMock()
 
         await adapter.send_response("C123", "Hello", thread_id="1234.5678")
 
@@ -246,6 +247,7 @@ class TestSlackSendResponse:
         )
         adapter = SlackAdapter(config)
         adapter.client = MagicMock()
+        adapter.client.chat_postMessage = AsyncMock()
 
         await adapter.send_response("C123", "Hello")
 

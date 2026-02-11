@@ -95,6 +95,12 @@
 - GOTCHA: test_table_count → when adding new ORM models, update assertion from 9 → 13 (import-order dependent)
 - GOTCHA: REPORT_TEMPLATES uses uppercase keys → need .upper() on report_type.value lookup
 - GOTCHA: ExpertSelector is sync not async → no pytest.mark.asyncio on tests
+- GOTCHA: login timing attack → if user not found, bcrypt skipped → attacker can enumerate emails by timing
+- GOTCHA: credentials_encrypted column was NOT encrypted → renamed to credentials_json (migration 006)
+- GOTCHA: bcrypt 72-byte limit → max_length on password fields prevents silent truncation + DoS
+- GOTCHA: pool_pre_ping missing → stale connections after DB restart cause "connection reset" errors
+- GOTCHA: migration idx_message_conversation name collision → migration 001 + 004 both use same name
+- GOTCHA: get_session inside get_current_user → creates separate session from request DI session
 
 ## Architecture
 
@@ -159,3 +165,16 @@
 - GOTCHA: ruff format needed after heredoc-created Python files → always run ruff format after bash-based file creation
 - GOTCHA: .dockerignore at root is what Docker uses (not docker/.dockerignore) → keep both in sync
 - 2026-02-10 phase8-completion: 8 tasks, 4 waves, 53 new tests, 1087 total (1 skipped), 0 failures, all lint clean
+- MISTAKE: .env has real secrets (API key, DB password) → rotate immediately, purge from git history
+- GOTCHA: Telegram webhook router never calls validate_telegram_signature() → forged payloads accepted
+- GOTCHA: Slack url_verification handled before signature check → attacker can hijack handshake
+- GOTCHA: API key scopes stored in DB but never enforced → false sense of access control
+- GOTCHA: http_tools.py http_get/http_post have no SSRF protection → block private IPs, metadata endpoints
+- GOTCHA: deliver_webhook POSTs to user-provided URL without validation → SSRF via webhook URL
+- GOTCHA: LoginRequest password field has no max_length → bcrypt DoS via megabyte passwords
+- GOTCHA: IntegrityError handler leaks str(e.orig) to client → exposes DB schema details
+- GOTCHA: RequestIdMiddleware accepts arbitrary X-Request-ID → log injection possible
+- PATTERN: SA mapped_column alias → `mapped_column("db_col_name", ...)` maps Python attr to different DB column
+- PATTERN: L0 cache eviction → two-phase: remove expired first, then evict oldest by created_at
+- GOTCHA: fire-and-forget asyncio.create_task with shared AsyncSession → race condition, await instead
+- GOTCHA: Starlette middleware LIFO → register innermost first, CORS outermost (last registered)

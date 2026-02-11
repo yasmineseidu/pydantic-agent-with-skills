@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 # Hot cache TTL in seconds
 _CACHE_TTL: float = 60.0
 
+# Maximum L0 cache entries to prevent unbounded memory growth
+_CACHE_MAX_SIZE: int = 500
+
 
 class _CacheEntry:
     """In-memory cache entry with TTL tracking.
@@ -316,6 +319,26 @@ class MemoryRetriever:
         self._cache: dict[str, _CacheEntry] = {}
         self._hot_cache: Optional[HotMemoryCache] = hot_cache
 
+    def _evict_cache(self) -> None:
+        """Evict expired and oldest entries when cache exceeds max size.
+
+        First removes all expired entries. If still over _CACHE_MAX_SIZE,
+        removes oldest entries (by creation time) until at max size.
+        """
+        # Phase 1: Remove expired entries
+        expired_keys = [k for k, v in self._cache.items() if v.is_expired()]
+        for key in expired_keys:
+            del self._cache[key]
+
+        # Phase 2: If still over limit, evict oldest entries
+        if len(self._cache) >= _CACHE_MAX_SIZE:
+            sorted_keys = sorted(
+                self._cache.keys(), key=lambda k: self._cache[k].created_at
+            )
+            evict_count = len(self._cache) - _CACHE_MAX_SIZE + 1
+            for key in sorted_keys[:evict_count]:
+                del self._cache[key]
+
     async def retrieve(
         self,
         query: str,
@@ -403,7 +426,8 @@ class MemoryRetriever:
                         stats=stats,
                         contradictions=contradictions,
                     )
-                    # Also populate L0
+                    # Also populate L0 (with eviction)
+                    self._evict_cache()
                     self._cache[cache_key] = _CacheEntry(result)
                     return result
 
@@ -457,15 +481,16 @@ class MemoryRetriever:
             contradictions=contradictions,
         )
 
-        # Cache the result
+        # Cache the result (with eviction)
+        self._evict_cache()
         self._cache[cache_key] = _CacheEntry(result)
 
-        # Step 7: Update access metadata (fire-and-forget)
+        # Step 7: Update access metadata (awaited to avoid shared session race)
         memory_ids: list[UUID] = [sm.memory.id for sm in included_memories]
         if memory_ids:
-            asyncio.create_task(self._update_access_metadata(memory_ids))
+            await self._update_access_metadata(memory_ids)
 
-        # Warm L1 Redis hot cache (fire-and-forget)
+        # Warm L1 Redis hot cache (fire-and-forget is safe here -- no shared session)
         if self._hot_cache is not None and agent_id is not None:
             user_id_for_cache = team_id
             # Serialize ScoredMemory objects to dicts for Redis storage

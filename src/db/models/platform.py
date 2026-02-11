@@ -50,7 +50,9 @@ class PlatformConnectionORM(Base, UUIDMixin, TimestampMixin):
     """External platform bot connections.
 
     Maps external bot IDs (Telegram bot token, Slack app) to agents.
-    Credentials are stored encrypted in JSONB format.
+
+    WARNING: ``credentials_json`` stores platform credentials as plaintext JSONB.
+    Application-level encryption (e.g. Fernet) is a TODO before production use.
 
     Maps to the ``platform_connection`` table.
     """
@@ -68,7 +70,12 @@ class PlatformConnectionORM(Base, UUIDMixin, TimestampMixin):
         Enum(PlatformTypeEnum, name="platform_type", native_enum=True, create_constraint=False),
         nullable=False,
     )
-    credentials_encrypted: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    credentials_json: Mapped[dict] = mapped_column(
+        "credentials_encrypted",  # Keep DB column name for backwards compat
+        JSONB,
+        nullable=False,
+        doc="Platform credentials. WARNING: stored as plaintext JSONB. App-level encryption TODO.",
+    )
     webhook_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     external_bot_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(

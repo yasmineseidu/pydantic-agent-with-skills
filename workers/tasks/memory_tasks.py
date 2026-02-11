@@ -223,21 +223,24 @@ async def _call_llm(settings: Any, prompt: str, system_prompt: str = "") -> str:
 )
 def consolidate_memories(
     self,  # type: ignore[no-untyped-def]
-    team_id: str,
-    agent_id: str,
+    team_id: str | None = None,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Consolidate near-duplicate memories by merging similar pairs.
 
     Phase 1: finds active memory pairs with cosine similarity > 0.92,
     merges their content via LLM, re-embeds, and marks losers as superseded.
 
+    When called without args (e.g., from Beat schedule), iterates all distinct
+    (team_id, agent_id) pairs with active memories.
+
     Args:
         self: Celery task instance (for retries).
-        team_id: Team UUID as string.
-        agent_id: Agent UUID as string.
+        team_id: Team UUID as string. None to process all teams.
+        agent_id: Agent UUID as string. None to process all agents.
 
     Returns:
-        Dict with merge count: {"merges": int}.
+        Dict with total merge and summary counts.
     """
     logger.info(
         "consolidate_memories_started: team_id=%s, agent_id=%s",
@@ -272,54 +275,84 @@ def consolidate_memories(
 
 
 async def _async_consolidate(
-    team_id: str,
-    agent_id: str,
+    team_id: str | None = None,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Async implementation of memory consolidation.
 
-    Creates fresh services per invocation to avoid sharing state
-    between Celery task executions.
+    When team_id and agent_id are provided, consolidates only that pair.
+    When both are None, queries all distinct (team_id, agent_id) pairs
+    with active memories and consolidates each.
 
     Args:
-        team_id: Team UUID as string.
-        agent_id: Agent UUID as string.
+        team_id: Team UUID as string, or None to process all teams.
+        agent_id: Agent UUID as string, or None to process all agents.
 
     Returns:
-        Dict with merge count.
+        Dict with total merge and summary counts.
     """
     from uuid import UUID
+
+    from sqlalchemy import select
 
     from src.memory.embedding import EmbeddingService
 
     settings = get_task_settings()
     session_factory = get_task_session_factory()
 
-    async with session_factory() as session:
-        embedding_service = EmbeddingService(
-            api_key=settings.embedding_api_key or settings.llm_api_key,
-            model=settings.embedding_model,
-            dimensions=settings.embedding_dimensions,
-        )
+    # Build list of (team_id, agent_id) pairs to process
+    pairs: list[tuple[UUID, UUID]] = []
 
-        merges = await _merge_near_duplicates(
-            session=session,
-            embedding_service=embedding_service,
-            settings=settings,
-            agent_id=UUID(agent_id),
-            team_id=UUID(team_id),
-        )
+    if team_id is not None and agent_id is not None:
+        pairs = [(UUID(team_id), UUID(agent_id))]
+    else:
+        # Query all distinct (team_id, agent_id) pairs with active memories
+        async with session_factory() as session:
+            stmt = (
+                select(MemoryORM.team_id, MemoryORM.agent_id)
+                .where(MemoryORM.status == MemoryStatusEnum.ACTIVE)
+                .distinct()
+            )
+            result = await session.execute(stmt)
+            pairs = [(row[0], row[1]) for row in result.all() if row[0] and row[1]]
 
-        summaries = await _summarize_old_episodic(
-            session=session,
-            embedding_service=embedding_service,
-            settings=settings,
-            agent_id=UUID(agent_id),
-            team_id=UUID(team_id),
-        )
+    if not pairs:
+        logger.info("consolidate_memories: no active memory pairs found")
+        return {"merges": 0, "summaries": 0}
 
-        await session.commit()
+    total_merges = 0
+    total_summaries = 0
 
-        return {"merges": merges, "summaries": summaries}
+    for pair_team_id, pair_agent_id in pairs:
+        async with session_factory() as session:
+            embedding_service = EmbeddingService(
+                api_key=settings.embedding_api_key or settings.llm_api_key,
+                model=settings.embedding_model,
+                dimensions=settings.embedding_dimensions,
+            )
+
+            merges = await _merge_near_duplicates(
+                session=session,
+                embedding_service=embedding_service,
+                settings=settings,
+                agent_id=pair_agent_id,
+                team_id=pair_team_id,
+            )
+
+            summaries = await _summarize_old_episodic(
+                session=session,
+                embedding_service=embedding_service,
+                settings=settings,
+                agent_id=pair_agent_id,
+                team_id=pair_team_id,
+            )
+
+            await session.commit()
+
+            total_merges += merges
+            total_summaries += summaries
+
+    return {"merges": total_merges, "summaries": total_summaries}
 
 
 async def _merge_near_duplicates(
@@ -352,11 +385,20 @@ async def _merge_near_duplicates(
 
     from src.db.models.memory import MemoryORM, MemorySourceEnum, MemoryStatusEnum, MemoryTierEnum
 
-    stmt = select(MemoryORM).where(
-        MemoryORM.team_id == team_id,
-        MemoryORM.agent_id == agent_id,
-        MemoryORM.status == MemoryStatusEnum.ACTIVE,
-        MemoryORM.embedding.is_not(None),
+    # Limit per query to bound O(n^2) pairwise comparisons.
+    # 500 memories per (team, agent) → max 250K comparisons per type group.
+    _CONSOLIDATION_LIMIT: int = 500
+
+    stmt = (
+        select(MemoryORM)
+        .where(
+            MemoryORM.team_id == team_id,
+            MemoryORM.agent_id == agent_id,
+            MemoryORM.status == MemoryStatusEnum.ACTIVE,
+            MemoryORM.embedding.is_not(None),
+        )
+        .order_by(MemoryORM.last_accessed_at.desc())
+        .limit(_CONSOLIDATION_LIMIT)
     )
     result = await session.execute(stmt)
     memories = list(result.scalars().all())

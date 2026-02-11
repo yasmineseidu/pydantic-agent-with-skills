@@ -25,7 +25,7 @@ class UserCreate(BaseModel):
     """
 
     email: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     display_name: str
 
 
@@ -38,7 +38,7 @@ class UserRecord(BaseModel):
 
     id: UUID
     email: str
-    password_hash: str
+    password_hash: str = Field(exclude=True)
     display_name: str
     is_active: bool = True
     created_at: datetime

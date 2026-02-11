@@ -1466,8 +1466,8 @@ class TestSSEEdgeCases:
             f"Expected error event after mid-stream exception, got types: "
             f"{[e.get('type') for e in events]}"
         )
-        assert "Model inference failed" in error_events[0].get("content", ""), (
-            f"Error content should mention the exception: {error_events[0].get('content')}"
+        assert error_events[0].get("content") == "Internal server error", (
+            "Error content must not leak internal exception details"
         )
 
     @pytest.mark.asyncio

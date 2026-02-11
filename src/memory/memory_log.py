@@ -155,6 +155,38 @@ class MemoryAuditLog:
             changed_by,
         )
 
+    async def log_demoted(
+        self,
+        memory_id: UUID,
+        old_tier: str,
+        new_tier: str,
+        changed_by: str = "system",
+    ) -> None:
+        """Log that a memory was demoted to a lower storage tier.
+
+        Args:
+            memory_id: UUID of the demoted memory.
+            old_tier: Previous tier (hot, warm).
+            new_tier: New tier after demotion (warm, cold).
+            changed_by: Who or what triggered the demotion.
+        """
+        log_entry = MemoryLogORM(
+            memory_id=memory_id,
+            action="demoted",
+            old_tier=old_tier,
+            new_tier=new_tier,
+            changed_by=changed_by,
+        )
+        self._session.add(log_entry)
+        await self._session.flush()
+        logger.info(
+            "log_demoted: memory_id=%s old_tier=%s new_tier=%s changed_by=%s",
+            memory_id,
+            old_tier,
+            new_tier,
+            changed_by,
+        )
+
     async def log_contradiction(
         self,
         memory_a: UUID,
@@ -258,7 +290,7 @@ class MemoryAuditLog:
                     }
                 )
 
-            elif entry.action == "promoted" and mid in snapshots:
+            elif entry.action in ("promoted", "demoted") and mid in snapshots:
                 snapshots[mid] = snapshots[mid].model_copy(
                     update={
                         "tier": entry.new_tier or snapshots[mid].tier,

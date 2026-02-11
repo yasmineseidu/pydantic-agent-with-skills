@@ -233,19 +233,24 @@ class EmbeddingService:
         self,
         texts: list[str],
         batch_size: int = 100,
-    ) -> list[list[float]]:
+    ) -> list[list[float] | None]:
         """Embed a list of texts in batches, using L1 → L2 → L3 cache tiers.
 
         Splits the input into batches of ``batch_size``. Each batch is
         sent as a single API call. Texts already in L1 or L2 cache are served
         from cache and excluded from the API request.
 
+        Index correspondence is preserved: ``results[i]`` always corresponds
+        to ``texts[i]``. If a particular embedding could not be obtained
+        (e.g. partial API failure), the slot will be ``None``.
+
         Args:
             texts: List of texts to embed.
             batch_size: Maximum number of texts per API call.
 
         Returns:
-            List of embedding vectors, one per input text, in the same order.
+            List of embedding vectors (or None on failure), one per input
+            text, in the same order.
 
         Raises:
             RuntimeError: If any API call fails after retries.
@@ -301,5 +306,6 @@ class EmbeddingService:
 
         logger.info(f"embedding_batch: batch_count={batch_count}, total_texts={len(texts)}")
 
-        # All slots should be filled; cast away the None possibility
-        return [r for r in results if r is not None]
+        # Preserve index correspondence: results[i] matches texts[i].
+        # Slots that could not be filled remain None so callers can handle them.
+        return results

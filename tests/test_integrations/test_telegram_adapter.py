@@ -205,6 +205,22 @@ class TestTelegramFormatResponse:
         assert "\\\\" not in result  # No double escapes
         assert "\\*\\*bold\\*\\*" in result
 
+    def test_no_double_escape_pre_escaped(self, adapter: TelegramAdapter) -> None:
+        """Test pre-escaped input is not double-escaped."""
+        text = "Hello \\_ world \\*"
+        result = adapter.format_response(text)
+        # Should produce single escapes, not \\_ or \\*
+        assert result == "Hello \\_ world \\*"
+        assert "\\\\_" not in result
+        assert "\\\\*" not in result
+
+    def test_mixed_escaped_and_unescaped(self, adapter: TelegramAdapter) -> None:
+        """Test mix of pre-escaped and unescaped chars."""
+        text = "pre\\-escaped and unescaped!"
+        result = adapter.format_response(text)
+        assert result == "pre\\-escaped and unescaped\\!"
+        assert "\\\\-" not in result
+
 
 class TestTelegramSendResponse:
     """Tests for TelegramAdapter.send_response."""

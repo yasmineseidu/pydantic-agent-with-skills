@@ -228,7 +228,7 @@ class TierManager:
         await self._session.execute(stmt)
         await self._session.flush()
 
-        await self._audit_log.log_promoted(
+        await self._audit_log.log_demoted(
             memory_id=memory_id,
             old_tier=old_tier,
             new_tier=new_tier,

@@ -51,13 +51,13 @@ class TestPlatformConnectionORM:
             team_id=team_id,
             agent_id=agent_id,
             platform=PlatformTypeEnum.TELEGRAM,
-            credentials_encrypted={"bot_token": "encrypted_value"},
+            credentials_json={"bot_token": "encrypted_value"},
             status=PlatformStatusEnum.ACTIVE,
         )
         assert connection.team_id == team_id
         assert connection.agent_id == agent_id
         assert connection.platform == PlatformTypeEnum.TELEGRAM
-        assert connection.credentials_encrypted["bot_token"] == "encrypted_value"
+        assert connection.credentials_json["bot_token"] == "encrypted_value"
         assert connection.status == PlatformStatusEnum.ACTIVE
 
     def test_optional_fields(self) -> None:
@@ -66,7 +66,7 @@ class TestPlatformConnectionORM:
             team_id=uuid4(),
             agent_id=uuid4(),
             platform=PlatformTypeEnum.SLACK,
-            credentials_encrypted={},
+            credentials_json={},
             status=PlatformStatusEnum.ACTIVE,
         )
         assert connection.webhook_url is None

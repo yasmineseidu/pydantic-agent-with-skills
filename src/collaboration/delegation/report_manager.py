@@ -52,7 +52,7 @@ class ReportManager:
         """
         # Get template
         template_id = report_request.template_id or report_request.report_type.value
-        template = REPORT_TEMPLATES.get(template_id)
+        template = REPORT_TEMPLATES.get(template_id.upper())
         if not template:
             logger.warning(
                 f"report_request_failed: template_not_found={template_id}, "
@@ -154,7 +154,7 @@ class ReportManager:
 
         # Validate sections (optional, log warning if incomplete)
         template_id = report_type.value
-        template = REPORT_TEMPLATES.get(template_id)
+        template = REPORT_TEMPLATES.get(template_id.upper())
         if template:
             is_valid = self._validate_sections(report.content, template)
             if not is_valid:

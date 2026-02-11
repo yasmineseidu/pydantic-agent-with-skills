@@ -33,7 +33,10 @@ def validate_slack_signature(
     """
     # Replay protection: reject requests older than 5 minutes
     current_time = int(time.time())
-    request_time = int(timestamp)
+    try:
+        request_time = int(timestamp)
+    except (ValueError, TypeError):
+        return False
     if abs(current_time - request_time) > 60 * 5:
         return False
 

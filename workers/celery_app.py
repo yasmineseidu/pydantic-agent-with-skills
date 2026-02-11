@@ -37,6 +37,7 @@ def get_celery_app() -> Celery:
         task_track_started=True,
         task_default_queue="default",
         broker_connection_retry_on_startup=True,
+        result_expires=3600,  # Expire task results after 1 hour to prevent Redis bloat
     )
 
     # Auto-discover tasks in workers/tasks/

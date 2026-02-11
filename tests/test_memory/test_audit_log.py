@@ -169,6 +169,39 @@ class TestLogPromoted:
         session.flush.assert_awaited_once()
 
 
+class TestLogDemoted:
+    """Tests for MemoryAuditLog.log_demoted."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_log_demoted_records_tiers(self) -> None:
+        """Test that log_demoted records old_tier and new_tier with action='demoted'."""
+        session = _make_mock_session()
+        audit = MemoryAuditLog(session)
+        mid = uuid4()
+
+        await audit.log_demoted(memory_id=mid, old_tier="hot", new_tier="warm")
+
+        session.add.assert_called_once()
+        added_obj = session.add.call_args[0][0]
+        assert isinstance(added_obj, MemoryLogORM)
+        assert added_obj.action == "demoted"
+        assert added_obj.old_tier == "hot"
+        assert added_obj.new_tier == "warm"
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_log_demoted_calls_add_and_flush(self) -> None:
+        """Test that log_demoted calls session.add() and session.flush()."""
+        session = _make_mock_session()
+        audit = MemoryAuditLog(session)
+
+        await audit.log_demoted(memory_id=uuid4(), old_tier="hot", new_tier="cold")
+
+        session.add.assert_called_once()
+        session.flush.assert_awaited_once()
+
+
 class TestLogContradiction:
     """Tests for MemoryAuditLog.log_contradiction."""
 

@@ -43,11 +43,12 @@ def _create_openrouter_model(settings: Settings) -> OpenRouterModel:
     Returns:
         Configured OpenRouter model
     """
-    provider = OpenRouterProvider(
-        api_key=settings.llm_api_key,
-        app_url=settings.openrouter_app_url,
-        app_title=settings.openrouter_app_title,
-    )
+    kwargs: dict[str, str] = {"api_key": settings.llm_api_key}
+    if settings.openrouter_app_url is not None:
+        kwargs["app_url"] = settings.openrouter_app_url
+    if settings.openrouter_app_title is not None:
+        kwargs["app_title"] = settings.openrouter_app_title
+    provider = OpenRouterProvider(**kwargs)
     return OpenRouterModel(settings.llm_model, provider=provider)
 
 

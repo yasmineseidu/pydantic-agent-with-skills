@@ -10,6 +10,7 @@ from workers.tasks.platform_tasks import (
     _async_handle_platform_message,
     deliver_webhook,
     handle_platform_message,
+    validate_webhook_url,
 )
 
 
@@ -51,7 +52,7 @@ def _make_mock_connection() -> MagicMock:
     conn.id = uuid4()
     conn.platform = MagicMock()
     conn.platform.value = "telegram"
-    conn.credentials_encrypted = {"token": "fake-token"}
+    conn.credentials_json = {"token": "fake-token"}
     conn.webhook_url = "https://example.com/webhook"
     conn.external_bot_id = "bot123"
     return conn
@@ -486,6 +487,94 @@ class TestAsyncDeliverWebhook:
 
         assert result["delivery_id"] == did
 
+    async def test_no_signing_secret_fails_delivery(self) -> None:
+        """Returns error when webhook_signing_secret is not configured."""
+        delivery = _make_mock_delivery()
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+        settings.webhook_signing_secret = None
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert result["error"] == "webhook_signing_secret_not_configured"
+        session.commit.assert_awaited_once()
+
+    async def test_empty_signing_secret_fails_delivery(self) -> None:
+        """Returns error when webhook_signing_secret is empty string."""
+        delivery = _make_mock_delivery()
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+        settings.webhook_signing_secret = ""
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert result["error"] == "webhook_signing_secret_not_configured"
+
+    async def test_whitespace_signing_secret_fails_delivery(self) -> None:
+        """Returns error when webhook_signing_secret is whitespace only."""
+        delivery = _make_mock_delivery()
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+        settings.webhook_signing_secret = "   "
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert result["error"] == "webhook_signing_secret_not_configured"
+
     async def test_webhook_signature_sent(self) -> None:
         """Webhook POST includes X-Webhook-Signature header."""
         delivery = _make_mock_delivery()
@@ -528,3 +617,145 @@ class TestAsyncDeliverWebhook:
         assert headers["X-Webhook-Signature"].startswith("sha256=")
         assert headers["X-Webhook-Event"] == "agent.message"
         assert headers["X-Webhook-Event-Id"] == "evt-123"
+
+    async def test_ssrf_private_ip_blocked(self) -> None:
+        """Returns error when webhook URL resolves to private IP."""
+        delivery = _make_mock_delivery()
+        delivery.webhook_url = "http://192.168.1.1/hook"
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert "invalid_webhook_url" in result["error"]
+
+    async def test_ssrf_localhost_blocked(self) -> None:
+        """Returns error when webhook URL targets localhost."""
+        delivery = _make_mock_delivery()
+        delivery.webhook_url = "http://127.0.0.1/hook"
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert "invalid_webhook_url" in result["error"]
+
+    async def test_ssrf_ftp_scheme_blocked(self) -> None:
+        """Returns error when webhook URL uses non-HTTP scheme."""
+        delivery = _make_mock_delivery()
+        delivery.webhook_url = "ftp://example.com/hook"
+
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = delivery
+        session.execute = AsyncMock(return_value=mock_result)
+        session.commit = AsyncMock()
+
+        factory = _make_mock_session_factory(session)
+        settings = _make_mock_settings()
+
+        with (
+            patch(
+                "workers.tasks.platform_tasks.get_task_settings",
+                return_value=settings,
+            ),
+            patch(
+                "workers.tasks.platform_tasks.get_task_session_factory",
+                return_value=factory,
+            ),
+        ):
+            result = await _async_deliver_webhook(delivery_id=str(delivery.id))
+
+        assert result["status"] == "error"
+        assert "invalid_webhook_url" in result["error"]
+
+
+# ===========================================================================
+# URL Validation (SSRF) Tests
+# ===========================================================================
+
+
+class TestValidateWebhookUrl:
+    """Tests for validate_webhook_url SSRF prevention."""
+
+    def test_valid_https_url(self) -> None:
+        """Accepts valid HTTPS URL."""
+        result = validate_webhook_url("https://example.com/webhook")
+        assert result is None
+
+    def test_valid_http_url(self) -> None:
+        """Accepts valid HTTP URL."""
+        result = validate_webhook_url("http://example.com/webhook")
+        assert result is None
+
+    def test_rejects_ftp_scheme(self) -> None:
+        """Rejects non-HTTP(S) schemes."""
+        result = validate_webhook_url("ftp://example.com/file")
+        assert result is not None
+        assert "invalid scheme" in result
+
+    def test_rejects_file_scheme(self) -> None:
+        """Rejects file:// scheme."""
+        result = validate_webhook_url("file:///etc/passwd")
+        assert result is not None
+        assert "invalid scheme" in result
+
+    def test_rejects_loopback(self) -> None:
+        """Rejects 127.0.0.1."""
+        result = validate_webhook_url("http://127.0.0.1/hook")
+        assert result is not None
+        assert "blocked" in result
+
+    def test_rejects_private_10_range(self) -> None:
+        """Rejects 10.x.x.x private range."""
+        result = validate_webhook_url("http://10.0.0.1/hook")
+        assert result is not None
+        assert "blocked" in result
+
+    def test_rejects_private_192_range(self) -> None:
+        """Rejects 192.168.x.x private range."""
+        result = validate_webhook_url("http://192.168.1.1/hook")
+        assert result is not None
+        assert "blocked" in result
+
+    def test_rejects_missing_hostname(self) -> None:
+        """Rejects URL with no hostname."""
+        result = validate_webhook_url("http:///path")
+        assert result is not None
+        assert "missing hostname" in result

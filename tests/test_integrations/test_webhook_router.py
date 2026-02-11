@@ -4,20 +4,35 @@ import hashlib
 import hmac
 import json
 import time
-from unittest.mock import MagicMock, patch
+from typing import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.dependencies import get_db
 from src.api.routers.webhooks import router
 
 
 @pytest.fixture()
-def app() -> FastAPI:
-    """Create test FastAPI app with webhook router."""
+def mock_db() -> AsyncMock:
+    """Create mock async database session."""
+    return AsyncMock(spec=AsyncSession)
+
+
+@pytest.fixture()
+def app(mock_db: AsyncMock) -> FastAPI:
+    """Create test FastAPI app with webhook router and mocked DB."""
     app = FastAPI()
     app.include_router(router)
+
+    async def override_get_db() -> AsyncGenerator[AsyncMock, None]:
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
     return app
 
 
@@ -68,10 +83,17 @@ class TestTelegramWebhookEndpoint:
             )
             assert response.status_code == 400
 
-    def test_returns_200_valid_request(self, client: TestClient) -> None:
-        """Test returns 200 for valid request."""
+    def test_returns_200_valid_request(self, client: TestClient, mock_db: AsyncMock) -> None:
+        """Test returns 200 for valid request with matching connection."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         payload = json.dumps({"update_id": 1, "message": {"text": "hello"}}).encode()
 
@@ -86,10 +108,19 @@ class TestTelegramWebhookEndpoint:
                 assert response.status_code == 200
                 assert response.json()["status"] == "ok"
 
-    def test_returns_200_even_when_dispatch_fails(self, client: TestClient) -> None:
+    def test_returns_200_even_when_dispatch_fails(
+        self, client: TestClient, mock_db: AsyncMock
+    ) -> None:
         """Test returns 200 even when Celery dispatch fails."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         payload = json.dumps({"update_id": 2}).encode()
 
@@ -131,7 +162,39 @@ class TestSlackWebhookEndpoint:
             assert response.status_code == 404
 
     def test_url_verification_challenge(self, client: TestClient) -> None:
-        """Test url_verification returns challenge."""
+        """Test url_verification returns challenge (requires valid signature)."""
+        signing_secret = "test_signing_secret"
+        timestamp = str(int(time.time()))
+
+        payload = json.dumps(
+            {
+                "type": "url_verification",
+                "challenge": "test_challenge_abc123",
+            }
+        ).encode()
+
+        base_string = f"v0:{timestamp}:".encode() + payload
+        computed = hmac.new(signing_secret.encode(), base_string, hashlib.sha256).hexdigest()
+        signature = f"v0={computed}"
+
+        mock_settings = MagicMock()
+        mock_settings.feature_flags.enable_integrations = True
+        mock_settings.slack_signing_secret = signing_secret
+
+        with patch("src.api.routers.webhooks.load_settings", return_value=mock_settings):
+            response = client.post(
+                "/v1/webhooks/slack",
+                content=payload,
+                headers={
+                    "X-Slack-Request-Timestamp": timestamp,
+                    "X-Slack-Signature": signature,
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["challenge"] == "test_challenge_abc123"
+
+    def test_url_verification_rejected_without_signature(self, client: TestClient) -> None:
+        """Test url_verification is rejected without valid signature headers."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
 
@@ -147,8 +210,7 @@ class TestSlackWebhookEndpoint:
                 "/v1/webhooks/slack",
                 content=payload,
             )
-            assert response.status_code == 200
-            assert response.json()["challenge"] == "test_challenge_abc123"
+            assert response.status_code == 401
 
     def test_returns_400_invalid_json(self, client: TestClient) -> None:
         """Test returns 400 for invalid JSON."""
@@ -176,7 +238,7 @@ class TestSlackWebhookEndpoint:
             )
             assert response.status_code == 401
 
-    def test_returns_200_valid_event(self, client: TestClient) -> None:
+    def test_returns_200_valid_event(self, client: TestClient, mock_db: AsyncMock) -> None:
         """Test returns 200 for valid event with signature."""
         signing_secret = "test_signing_secret"
         timestamp = str(int(time.time()))
@@ -189,6 +251,7 @@ class TestSlackWebhookEndpoint:
                     "channel": "C456",
                     "text": "hi",
                 },
+                "api_app_id": "A123",
                 "team_id": "T123",
             }
         ).encode()
@@ -196,6 +259,13 @@ class TestSlackWebhookEndpoint:
         base_string = f"v0:{timestamp}:".encode() + body
         computed = hmac.new(signing_secret.encode(), base_string, hashlib.sha256).hexdigest()
         signature = f"v0={computed}"
+
+        # Mock _lookup_connection returning a valid connection
+        mock_connection = MagicMock()
+        mock_connection.id = uuid4()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_connection
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
@@ -234,8 +304,8 @@ class TestSlackWebhookEndpoint:
             )
             assert response.status_code == 401
 
-    def test_returns_200_no_signing_secret(self, client: TestClient) -> None:
-        """Test returns 200 when no signing secret configured (skips validation)."""
+    def test_returns_503_no_signing_secret(self, client: TestClient) -> None:
+        """Test returns 503 when no signing secret configured (validation impossible)."""
         mock_settings = MagicMock()
         mock_settings.feature_flags.enable_integrations = True
         mock_settings.slack_signing_secret = None
@@ -244,20 +314,18 @@ class TestSlackWebhookEndpoint:
             {
                 "type": "event_callback",
                 "event": {"type": "message"},
+                "api_app_id": "A123",
                 "team_id": "T123",
             }
         ).encode()
 
         with patch("src.api.routers.webhooks.load_settings", return_value=mock_settings):
-            with patch("workers.tasks.platform_tasks.handle_platform_message") as mock_task:
-                mock_task.delay = MagicMock()
-                response = client.post(
-                    "/v1/webhooks/slack",
-                    content=payload,
-                    headers={
-                        "X-Slack-Request-Timestamp": str(int(time.time())),
-                        "X-Slack-Signature": "v0=anything",
-                    },
-                )
-                assert response.status_code == 200
-                assert response.json()["status"] == "ok"
+            response = client.post(
+                "/v1/webhooks/slack",
+                content=payload,
+                headers={
+                    "X-Slack-Request-Timestamp": str(int(time.time())),
+                    "X-Slack-Signature": "v0=anything",
+                },
+            )
+            assert response.status_code == 503

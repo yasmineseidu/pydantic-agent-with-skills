@@ -94,7 +94,12 @@ def db_session() -> AsyncSession:
         An AsyncMock configured as AsyncSession.
     """
     mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.execute = AsyncMock()
+    # Default execute returns a result with sync scalar_one_or_none (truthy)
+    # to satisfy IDOR ownership checks without RuntimeWarning.
+    default_result = MagicMock()
+    default_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
+    default_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+    mock_session.execute = AsyncMock(return_value=default_result)
     mock_session.commit = AsyncMock()
     mock_session.rollback = AsyncMock()
     mock_session.close = AsyncMock()

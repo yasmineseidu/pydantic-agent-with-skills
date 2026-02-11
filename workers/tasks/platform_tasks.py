@@ -1,14 +1,65 @@
 """Celery tasks for platform integration message handling and webhook delivery."""
 
+import ipaddress
 import logging
+import socket
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from celery import shared_task
 
 from workers.utils import get_task_session_factory, get_task_settings, run_async
 
 logger = logging.getLogger(__name__)
+
+
+def validate_webhook_url(url: str) -> str | None:
+    """Validate a webhook URL is safe to POST to (SSRF prevention).
+
+    Blocks private IPs, loopback, link-local, cloud metadata endpoints,
+    and non-HTTP(S) schemes.
+
+    Args:
+        url: The webhook URL to validate.
+
+    Returns:
+        None if valid, error message string if invalid.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "invalid URL"
+
+    # Only allow http/https
+    if parsed.scheme not in ("http", "https"):
+        return f"invalid scheme: {parsed.scheme}"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return "missing hostname"
+
+    # Resolve hostname to IP and check for private ranges
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.gaierror:
+        return f"cannot resolve hostname: {hostname}"
+
+    for _, _, _, _, sockaddr in resolved_ips:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return f"blocked private/reserved IP: {ip_str}"
+
+        # Block cloud metadata endpoints explicitly
+        if ip_str in ("169.254.169.254", "fd00:ec2::254"):
+            return f"blocked metadata endpoint: {ip_str}"
+
+    return None
 
 
 @shared_task(
@@ -101,7 +152,7 @@ async def _async_handle_platform_message(connection_id: str, payload: dict) -> d
         # Build adapter config
         config = PlatformConfig(
             platform=connection.platform.value,
-            credentials=connection.credentials_encrypted,
+            credentials=connection.credentials_json,
             webhook_url=connection.webhook_url,
             external_bot_id=connection.external_bot_id,
         )
@@ -238,14 +289,67 @@ async def _async_deliver_webhook(delivery_id: str) -> dict[str, Any]:
             logger.error("deliver_webhook_not_found: delivery_id=%s", delivery_id)
             return {"delivery_id": delivery_id, "status": "error", "error": "not_found"}
 
+        # SSRF prevention: validate webhook URL before POSTing
+        url_error = validate_webhook_url(delivery.webhook_url)
+        if url_error:
+            logger.error(
+                "deliver_webhook_ssrf_blocked: delivery_id=%s, url=%s, reason=%s",
+                delivery_id,
+                delivery.webhook_url[:100],
+                url_error,
+            )
+            await session.execute(
+                update(WebhookDeliveryLogORM)
+                .where(WebhookDeliveryLogORM.id == UUID(delivery_id))
+                .values(
+                    failed_at=datetime.now(timezone.utc),
+                    response_body=f"URL validation failed: {url_error}",
+                )
+            )
+            await session.commit()
+            return {
+                "delivery_id": delivery_id,
+                "status": "error",
+                "error": f"invalid_webhook_url: {url_error}",
+            }
+
         # Sign payload with HMAC-SHA256
         payload_bytes = json.dumps(delivery.payload).encode("utf-8")
-        signing_secret = settings.webhook_signing_secret or ""
+        signing_secret = (settings.webhook_signing_secret or "").strip()
+
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            "X-Webhook-Event": delivery.event_type,
+            "X-Webhook-Event-Id": delivery.event_id,
+        }
+
+        if not signing_secret:
+            logger.error(
+                "deliver_webhook_no_signing_secret: delivery_id=%s, "
+                "cannot sign payload without webhook_signing_secret",
+                delivery_id,
+            )
+            await session.execute(
+                update(WebhookDeliveryLogORM)
+                .where(WebhookDeliveryLogORM.id == UUID(delivery_id))
+                .values(
+                    failed_at=datetime.now(timezone.utc),
+                    response_body="webhook_signing_secret not configured",
+                )
+            )
+            await session.commit()
+            return {
+                "delivery_id": delivery_id,
+                "status": "error",
+                "error": "webhook_signing_secret_not_configured",
+            }
+
         signature = hmac.new(
             key=signing_secret.encode("utf-8"),
             msg=payload_bytes,
             digestmod=hashlib.sha256,
         ).hexdigest()
+        headers["X-Webhook-Signature"] = f"sha256={signature}"
 
         # POST to webhook URL
         try:
@@ -253,12 +357,7 @@ async def _async_deliver_webhook(delivery_id: str) -> dict[str, Any]:
                 response = await client.post(
                     delivery.webhook_url,
                     content=payload_bytes,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Webhook-Signature": f"sha256={signature}",
-                        "X-Webhook-Event": delivery.event_type,
-                        "X-Webhook-Event-Id": delivery.event_id,
-                    },
+                    headers=headers,
                 )
 
             http_status = response.status_code

@@ -622,10 +622,10 @@ class TestCallLLM:
         self,
         mock_session: AsyncMock,
     ) -> None:
-        """Test that LLM timeout is handled gracefully by raising RuntimeError."""
+        """Test that LLM timeout retries and raises RuntimeError after exhaustion."""
         import httpx
 
-        # Mock client that raises timeout
+        # Mock client that raises timeout on every attempt
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -635,7 +635,10 @@ class TestCallLLM:
         contradiction_detector = AsyncMock()
         audit_log = AsyncMock()
 
-        with patch("src.memory.storage.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("src.memory.storage.httpx.AsyncClient", return_value=mock_client),
+            patch("src.memory.storage.asyncio.sleep", new_callable=AsyncMock),
+        ):
             extractor = MemoryExtractor(
                 session=mock_session,
                 embedding_service=embedding_service,
@@ -644,8 +647,11 @@ class TestCallLLM:
                 api_key="test-key",
             )
 
-            with pytest.raises(httpx.TimeoutException):
+            with pytest.raises(RuntimeError, match="timed out"):
                 await extractor._call_llm("Test prompt")
+
+            # Verify all 3 retry attempts were made
+            assert mock_client.post.await_count == 3
 
 
 class TestExtractPersistence:

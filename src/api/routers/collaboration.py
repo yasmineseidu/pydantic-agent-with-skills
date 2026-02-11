@@ -58,6 +58,73 @@ def _require_feature_flag(enabled: bool, flag_name: str) -> None:
         )
 
 
+async def _verify_conversation_ownership(
+    db: AsyncSession, conversation_id: UUID, team_id: Optional[UUID]
+) -> None:
+    """Verify the conversation belongs to the user's team.
+
+    Args:
+        db: Async database session.
+        conversation_id: Conversation UUID to check.
+        team_id: Current user's team UUID.
+
+    Raises:
+        HTTPException: 404 if conversation not found or not in user's team.
+    """
+    if team_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Team membership required",
+        )
+    stmt = select(ConversationORM.id).where(
+        ConversationORM.id == conversation_id,
+        ConversationORM.team_id == team_id,
+    )
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        )
+
+
+async def _verify_session_ownership(
+    db: AsyncSession, session_id: UUID, team_id: Optional[UUID]
+) -> None:
+    """Verify the collaboration session belongs to the user's team.
+
+    Args:
+        db: Async database session.
+        session_id: CollaborationSession UUID to check.
+        team_id: Current user's team UUID.
+
+    Raises:
+        HTTPException: 404 if session not found or not in user's team.
+    """
+    if team_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Team membership required",
+        )
+    stmt = (
+        select(CollaborationSessionORM.id)
+        .join(
+            ConversationORM,
+            CollaborationSessionORM.conversation_id == ConversationORM.id,
+        )
+        .where(
+            CollaborationSessionORM.id == session_id,
+            ConversationORM.team_id == team_id,
+        )
+    )
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+
 @router.post("/v1/collaboration/route", response_model=RoutingDecision)
 async def route_to_agent(
     payload: CollaborationRouteRequest,
@@ -114,10 +181,12 @@ async def initiate_handoff(
     settings: Settings = Depends(get_settings),
 ) -> HandoffResult:
     """Initiate a handoff between agents for a conversation."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(
         settings.feature_flags.enable_agent_collaboration, "enable_agent_collaboration"
     )
+
+    await _verify_conversation_ownership(db, payload.conversation_id, team_id)
 
     manager = HandoffManager(db)
     result = await manager.initiate_handoff(
@@ -133,7 +202,7 @@ async def initiate_handoff(
             await db.commit()
         except Exception as exc:
             await db.rollback()
-            logger.error(f"handoff_commit_failed: user_id={user.id}, error={str(exc)}")
+            logger.error("handoff_commit_failed: user_id=%s error=%s", user.id, str(exc))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to persist handoff",
@@ -153,17 +222,21 @@ async def list_handoffs(
     settings: Settings = Depends(get_settings),
 ) -> list[HandoffRecordResponse]:
     """List recent handoffs for a conversation."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(
         settings.feature_flags.enable_agent_collaboration, "enable_agent_collaboration"
     )
+
+    await _verify_conversation_ownership(db, conversation_id, team_id)
 
     manager = HandoffManager(db)
     records = await manager.get_handoff_history(conversation_id=conversation_id, limit=limit)
 
     logger.info(
-        f"handoff_history_listed: user_id={user.id}, conversation_id={conversation_id}, "
-        f"count={len(records)}"
+        "handoff_history_listed: user_id=%s conversation_id=%s count=%d",
+        user.id,
+        conversation_id,
+        len(records),
     )
 
     return [
@@ -188,8 +261,10 @@ async def create_session(
     settings: Settings = Depends(get_settings),
 ) -> CollaborationSession:
     """Create a new collaboration session."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
+
+    await _verify_conversation_ownership(db, payload.conversation_id, team_id)
 
     manager = MultiAgentManager(db)
     session = await manager.create_collaboration(
@@ -203,7 +278,7 @@ async def create_session(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.error(f"collaboration_create_commit_failed: user_id={user.id}, error={str(exc)}")
+        logger.error("collaboration_create_commit_failed: user_id=%s error=%s", user.id, str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to persist collaboration session",
@@ -224,8 +299,10 @@ async def add_participants(
     settings: Settings = Depends(get_settings),
 ) -> CollaborationSession:
     """Add participants to an existing collaboration session."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
+
+    await _verify_session_ownership(db, session_id, team_id)
 
     manager = MultiAgentManager(db)
     participants = [(item.agent_id, item.role) for item in payload.participants]
@@ -258,8 +335,10 @@ async def update_session_status(
     settings: Settings = Depends(get_settings),
 ) -> CollaborationSession:
     """Update collaboration session status."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
+
+    await _verify_session_ownership(db, session_id, team_id)
 
     manager = MultiAgentManager(db)
     session = await manager.update_session_status(
@@ -289,8 +368,10 @@ async def get_session(
     settings: Settings = Depends(get_settings),
 ) -> CollaborationSession:
     """Get a collaboration session by ID."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(settings.feature_flags.enable_collaboration, "enable_collaboration")
+
+    await _verify_session_ownership(db, session_id, team_id)
 
     session_orm = await db.get(CollaborationSessionORM, session_id)
     if not session_orm:
@@ -336,8 +417,10 @@ async def delegate_task(
     settings: Settings = Depends(get_settings),
 ) -> AgentTask:
     """Delegate a task to another agent."""
-    user, _team_id = current_user
+    user, team_id = current_user
     _require_feature_flag(settings.feature_flags.enable_task_delegation, "enable_task_delegation")
+
+    await _verify_conversation_ownership(db, payload.conversation_id, team_id)
 
     manager = DelegationManager(db)
     result = await manager.delegate_task(

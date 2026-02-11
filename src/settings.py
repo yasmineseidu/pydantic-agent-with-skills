@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from dotenv import load_dotenv
 from typing import Optional, Literal
 
@@ -113,6 +113,23 @@ class Settings(BaseSettings):
     # JWT Authentication (Phase 4)
     jwt_secret_key: Optional[str] = Field(default=None, description="Secret key for JWT signing")
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
+
+    @field_validator("jwt_algorithm")
+    @classmethod
+    def validate_jwt_algorithm(cls, v: str) -> str:
+        """Restrict to HS256 only.
+
+        python-jose has CVE-2024-33663 and CVE-2024-33664 (ECDSA signature
+        bypass). HS256 is not affected, but other algorithms use vulnerable
+        code paths. Migration to PyJWT is recommended.
+        """
+        if v != "HS256":
+            raise ValueError(
+                "Only HS256 is supported. python-jose CVE-2024-33663/CVE-2024-33664 "
+                "affect ECDSA algorithms. Migrate to PyJWT to use other algorithms."
+            )
+        return v
+
     jwt_access_token_expire_minutes: int = Field(
         default=30, ge=1, description="Access token expiry in minutes"
     )

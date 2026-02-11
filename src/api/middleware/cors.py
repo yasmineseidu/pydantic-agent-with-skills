@@ -26,9 +26,19 @@ def configure_cors(app: FastAPI, settings: "Settings") -> None:
     Returns:
         None (modifies app in-place)
     """
-    origins = settings.cors_origins
+    origins = list(settings.cors_origins)
 
-    logger.info(f"cors_configured: origins={origins}, allow_credentials=True")
+    # Prevent dangerous combination: allow_credentials=True with wildcard origin.
+    # Browsers reject Access-Control-Allow-Origin: * when credentials are included,
+    # and permitting it can enable CSRF-like attacks.
+    if "*" in origins:
+        origins.remove("*")
+        logger.warning(
+            "cors_wildcard_removed: allow_credentials=True is incompatible with "
+            "wildcard origin '*'. Removed '*' from allowed origins."
+        )
+
+    logger.info("cors_configured: origins=%s, allow_credentials=True", origins)
 
     app.add_middleware(
         CORSMiddleware,

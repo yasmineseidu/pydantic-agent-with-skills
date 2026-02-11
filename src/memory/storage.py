@@ -1,5 +1,6 @@
 """Double-pass memory extraction from conversations."""
 
+import asyncio
 import json
 import logging
 import re
@@ -170,7 +171,7 @@ class MemoryExtractor:
             if contradiction.action == "supersede" and contradiction.contradicts:
                 for old_id in contradiction.contradicts:
                     await self._supersede_memory(old_id)
-                memories_versioned += 1
+                memories_versioned += len(contradiction.contradicts)
 
             # Step f: Insert new memory
             new_orm: MemoryORM = self._build_memory_orm(
@@ -280,7 +281,10 @@ class MemoryExtractor:
     # ------------------------------------------------------------------
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call the LLM chat completions API.
+        """Call the LLM chat completions API with retry on transient failures.
+
+        Retries up to 3 times with exponential backoff on HTTP 429 and 5xx
+        status codes, matching the retry strategy in EmbeddingService._call_api.
 
         Args:
             prompt: The full prompt text to send as a user message.
@@ -289,26 +293,71 @@ class MemoryExtractor:
             The assistant's response content string.
 
         Raises:
-            RuntimeError: If the API returns an HTTP error status.
+            RuntimeError: If the API returns a non-retryable error or all
+                retries are exhausted.
         """
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self._extraction_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.0,
-                },
-            )
+        max_retries: int = 3
+        base_delay: float = 1.0
+        last_error: str | None = None
 
-        if response.status_code >= 400:
-            raise RuntimeError(f"LLM API error: HTTP {response.status_code}")
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self._api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": self._extraction_model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.0,
+                        },
+                    )
 
-        return response.json()["choices"][0]["message"]["content"]
+                # Retry on 429 (rate limit) and 5xx (server errors)
+                if response.status_code == 429 or response.status_code >= 500:
+                    delay: float = base_delay * (2**attempt)
+                    logger.warning(
+                        "call_llm_retryable_error: status=%d, attempt=%d/%d, retrying_in=%.1fs",
+                        response.status_code,
+                        attempt + 1,
+                        max_retries,
+                        delay,
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(delay)
+                        continue
+                    raise RuntimeError(
+                        f"LLM API error: HTTP {response.status_code} after {max_retries} retries"
+                    )
+
+                # Non-retryable client errors
+                if response.status_code >= 400:
+                    raise RuntimeError(f"LLM API error: HTTP {response.status_code}")
+
+                return response.json()["choices"][0]["message"]["content"]
+
+            except httpx.TimeoutException:
+                last_error = "LLM API request timed out"
+                logger.warning("call_llm_timeout: attempt=%d/%d", attempt + 1, max_retries)
+            except httpx.RequestError as e:
+                last_error = f"LLM API request failed: {e}"
+                logger.warning(
+                    "call_llm_request_error: attempt=%d/%d, error=%s",
+                    attempt + 1,
+                    max_retries,
+                    str(e),
+                )
+            except RuntimeError:
+                raise
+
+            if attempt < max_retries - 1:
+                delay = base_delay * (2**attempt)
+                await asyncio.sleep(delay)
+
+        raise RuntimeError(last_error or "LLM API failed after retries")
 
     # ------------------------------------------------------------------
     # Parsing

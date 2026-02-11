@@ -413,7 +413,7 @@ class CollaborationSession(BaseModel):
     id: UUID
     pattern: CollaborationPattern
     status: CollaborationStatus
-    initiator_id: UUID
+    initiator_id: Optional[UUID] = None
     participants: list[CollaborationParticipantInfo]
     started_at: datetime
     completed_at: Optional[datetime] = None

@@ -1053,7 +1053,7 @@ async def _stream_agent_response(
             request_id,
             str(e),
         )
-        yield StreamChunk(type="error", content=f"Stream failed: {str(e)}")
+        yield StreamChunk(type="error", content="Internal server error")
 
 
 @router.post(
@@ -1290,7 +1290,7 @@ async def _handle_ws_message(
         await websocket.send_json(
             {
                 "type": "error",
-                "content": f"Stream failed: {str(e)}",
+                "content": "Internal server error",
             }
         )
 
@@ -1478,7 +1478,7 @@ async def agent_websocket(
             await websocket.send_json(
                 {
                     "type": "error",
-                    "content": f"WebSocket error: {str(e)}",
+                    "content": "Internal server error",
                 }
             )
         except Exception:

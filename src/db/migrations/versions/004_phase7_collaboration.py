@@ -390,7 +390,7 @@ def upgrade() -> None:
     op.create_index("idx_task_assigned_to", "agent_task", ["assigned_to_agent_id"])
     op.create_index("idx_task_parent", "agent_task", ["parent_task_id"])
 
-    op.create_index("idx_message_conversation", "agent_message", ["conversation_id"])
+    op.create_index("idx_agent_message_conversation", "agent_message", ["conversation_id"])
     op.create_index("idx_message_from_agent", "agent_message", ["from_agent_id"])
     op.create_index("idx_message_to_agent", "agent_message", ["to_agent_id"])
     op.execute(

@@ -29,6 +29,8 @@ async def get_engine(
         database_url,
         pool_size=pool_size,
         max_overflow=pool_overflow,
+        pool_pre_ping=True,
+        pool_recycle=3600,
     )
     return engine
 

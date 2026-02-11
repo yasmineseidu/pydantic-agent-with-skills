@@ -171,6 +171,15 @@ async def get_current_user(
                     )
                     raise HTTPException(status_code=401, detail="API key has expired")
 
+            # Scope enforcement: warn when key has scopes defined but enforcement is pending
+            if api_key.scopes:
+                # TODO(security): Implement full scope enforcement against endpoint requirements.
+                # Currently scopes are stored but not checked — any valid key can access any endpoint.
+                logger.warning(
+                    f"get_current_user_warning: reason=scopes_not_enforced, "
+                    f"key_prefix={api_key.key_prefix}, scopes={api_key.scopes}"
+                )
+
             # Look up user
             user_stmt = select(UserORM).where(UserORM.id == api_key.user_id)
             user_result = await session.execute(user_stmt)

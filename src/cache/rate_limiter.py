@@ -95,12 +95,13 @@ class RateLimiter:
 
             key: str = self._key(team_id, resource)
 
-            # INCR is atomic
-            count: int = await client.incr(key)  # type: ignore[misc, union-attr]
-
-            # If this is the first request, set expiration
-            if count == 1:
-                await client.expire(key, window_seconds)  # type: ignore[misc, union-attr]
+            # Use pipeline to make INCR + EXPIRE atomic (prevents orphaned keys
+            # if the process crashes between the two commands).
+            async with client.pipeline(transaction=True) as pipe:  # type: ignore[union-attr]
+                pipe.incr(key)  # type: ignore[union-attr]
+                pipe.expire(key, window_seconds)  # type: ignore[union-attr]
+                results = await pipe.execute()  # type: ignore[union-attr]
+            count: int = results[0]
 
             # Check TTL to determine reset time
             ttl: int = await client.ttl(key)  # type: ignore[misc, union-attr]
